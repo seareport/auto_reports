@@ -137,10 +137,10 @@ def convert_zarr_to_netcdf(fn,storage_options,  fout ):
         ds_model.to_netcdf(fout)
 
 
-def get_model_data(ds_model, station): 
-    ix = np.where(ds_model.id.values == 'IOC-' + station)[0]
+def get_model_data(ds: xr.Dataset, station: str): 
+    ix = np.where(ds.id.values == 'IOC-' + station)[0]
     if len(ix) == 1:
-        tg = ds_model[dict(id=ix)]
+        tg = ds[dict(id=ix)]
         tg2 = tg.to_dataframe()
         sim = tg2.reset_index(level='id').drop(columns='id')
         return sim['elev_sim']
@@ -166,13 +166,13 @@ def compute_stats(obs,sim):
 
 def compare_one_ioc(station:str, 
                     lat:float,
-                    obs_folder:str, 
+                    obs_root:str, 
                     opts:dict, 
                     ds_model:xr.Dataset, 
                     plot: bool = False,
                     avg: bool = True,
     ) -> pd.DataFrame():
-    obs_data = get_obs_data(obs_folder,station)
+    obs_data = get_obs_data(os.path.join(obs_root, "clean"),station)
     local_opts = opts.copy()
     local_opts['lat'] = lat
     for sensor in obs_data.columns: 
@@ -182,7 +182,7 @@ def compare_one_ioc(station:str,
         sim = get_model_data(ds_model, station) 
         stats = compute_stats(obs, sim)
         if len(obs)>0:
-            write_df(obs.to_frame(), os.path.join(obs_folder,station+'.csv') ) 
+            write_df(obs.to_frame(), os.path.join(obs_root, 'surge', station+'.csv') ) 
         # add sensor info
         stats['sensor'] = sensor
         return pd.DataFrame(data = {key:val for key,val in stats.items()} , index=[station])
@@ -193,12 +193,11 @@ def generate_ioc_comparison_inputs(stations: pd.DataFrame,
                                    opts: dict,
                                    ds_model:xr.Dataset):
     inputs = []
-    N = len(stations)
     for i_s, station in enumerate(stations.ioc_code):
         lat = stations.iloc[i_s].latitude
         inputs.append(dict(station=station,
                            lat=lat,
-                           obs_folder=obs_folder, 
+                           obs_root=obs_folder, 
                            opts=opts,
                            ds_model=ds_model))
     return inputs
@@ -247,8 +246,15 @@ def avg_ts(timestamps:list) ->pd.Timestamp:
     """
     Convert the times to seconds, then average, then back convert to pd.Timestamp
     """
-    seconds = [ts.timestamp() for ts in timestamps]
-    average_seconds = sum(seconds) / len(seconds)
+    seconds = 0
+    sec_len = 0
+    for ts in timestamps:
+        try: 
+            seconds += ts.timestamp()
+            sec_len += 1
+        except Exception as e:
+            pass
+    average_seconds = seconds / sec_len
     return pd.Timestamp(average_seconds, unit='s')
 
 

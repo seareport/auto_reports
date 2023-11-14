@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd 
 import xarray as xr
 import geopandas as gpd
+from scipy.signal import find_peaks
 
 import logging
 import shapely 
@@ -22,9 +23,11 @@ from data_process import (ensure_directory,
                           compute_surge_comparison_serial,
                           ioc_subset_from_files_in_folder, 
                           get_storm_peak_time, avg_ts)
-from common import CONTAINER, COASTLINES, SEASET_CATALOG, STORAGE_AZ, NOW, START
+from common import CONTAINER, COASTLINES, SEASET_CATALOG, STORAGE_AZ, NOW, START, PROPS
 
-# PLOTS
+CM = 1/1.5
+
+# HELPERS
 def normalize(values, vmin, vmax):
     normalized = np.clip(values, vmin, vmax)
     return normalized
@@ -36,6 +39,29 @@ def normalize_bar(values, vmin, vmax):
     return normalized
 
 
+def get_storm_error(obs: pd.DataFrame, sim: pd.DataFrame, storm_peak_time: pd.Timestamp): 
+    time_window = pd.Timedelta(hours=3)
+    time_filter = (obs.index >= storm_peak_time - time_window) & (obs.index <= storm_peak_time + time_window)
+
+    # Apply time filter
+    obs_window = obs[time_filter]
+    sim_window = sim.loc[obs_window.index.intersection(sim.index)]
+
+    # Find local peaks
+    obs_peaks, _ = find_peaks(obs_window)
+    sim_peaks, _ = find_peaks(sim_window)
+    if len(obs_peaks) == 0 or len(sim_peaks) == 0:
+        return np.nan  # or handle error differently
+    # Find the peak closest to the storm surge time in both datasets
+    obs_peak_index = obs_peaks[np.argmin(abs(obs_window.index[obs_peaks] - storm_peak_time))]
+    sim_peak_index = sim_peaks[np.argmin(abs(sim_window.index[sim_peaks] - storm_peak_time))]
+
+    obs_peak_value = obs_window.iloc[obs_peak_index]
+    sim_peak_value = sim_window.iloc[sim_peak_index]
+    error = np.round(abs((sim_peak_value - obs_peak_value) / obs_peak_value) * 100, 1)
+    return error
+
+# PLOTS
 def plot_stations_map(skill, 
                       skill_param='RMSE', 
                       vmin = 0, 
@@ -131,24 +157,30 @@ def plot_side_histograms(df, ax_horizontal, ax_vertical, value_col, vmin, vmax):
 def plot_time_series(df:pd.DataFrame, obs_d: str, ds: xr.Dataset, ax = None, avg = False):
     station = df.ioc_code
     obs = get_obs_data(obs_d,station)
-    sim = get_model_data(ds, station)
     if ax is None: fig, ax = plt.subplots(figsize=(10,5))
     label = df.Station_Name
     for sensor in obs.columns: 
-        obs[sensor].interpolate().plot(ax=ax, label=str(label) + ' measured', color='k', linestyle='dashed')
-    sim.plot(ax=ax, label=label+' model')
-    ax.legend(loc='lower left')
+        obs[sensor].reindex(index=pd.date_range(obs.index.min(), obs.index.max(), freq='10min')).plot(ax=ax, label=str(label) + ' measured', color='k', style='.')
+    sim = get_model_data(ds, station)
     ax.set_xlim([obs.index.min(), obs.index.max()])
-    # Add a light opacity text boxabs(sim_max - obs_max) / obs_max
-    for col in obs.columns:
-        textstr = f'Max error on the surge {np.round(abs(sim.max() - obs[col].max()/obs[col].max())*100,1)}%'
-        if avg: 
-            fit =  - sim.mean() + obs[col].mean()
-            sim = sim + fit
-            textstr += f'\nAttention: sim was fitted to obs by {np.round(fit,2)}m'
-    props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-    ax.text(0.5, 0.07, textstr, transform=plt.gca().transAxes, fontsize=14,
-            verticalalignment='top', bbox=props)
+    if not sim.empty and len(sim)>0: 
+        sim.reindex(index=pd.date_range(obs.index.min(), obs.index.max(), freq='10min')).plot(ax=ax, label=str(label)+' model')
+        for col in obs.columns:
+            ts = sim.idxmax() #
+            error = get_storm_error(obs[col], sim, ts)
+            textstr = f'error at peak surge {error}%'
+            if avg: 
+                fit =  - sim.mean() + obs[col].mean()
+                sim = sim + fit
+                textstr += f'\nAttention: sim was fitted to obs by {np.round(fit,2)}m'
+        ax.text(0.5, 0.07, textstr, transform=plt.gca().transAxes, fontsize=14,
+                verticalalignment='top', bbox=PROPS)
+    else : 
+        textstr = 'No simulation data'
+        ax.text(0.5, 0.07, textstr, transform=plt.gca().transAxes, fontsize=14,
+                verticalalignment='top', bbox=PROPS)
+    ax.legend(loc='lower left')
+
 
 def plot_map_availability(ioc_detided, ax = None, bbox: shapely.box = None): 
     if ax is None: fig, ax = plt.subplots()
@@ -232,7 +264,7 @@ def create_first_page(ioc_detided, gauges, area):
     """
     Create the first page of the surge report with the main map, a secondary map, and statistics.
     """
-    fig = plt.figure(figsize=(21, 29.7), constrained_layout = True)  # A4 format
+    fig = plt.figure(figsize=(21*CM, 29.7*CM), constrained_layout = True)  # A4 format
     outgs = GridSpec(3, 2, figure=fig)
     plt.axis('off')
     map_ax = fig.add_subplot(outgs[:2, :])  # Main map
@@ -253,11 +285,11 @@ def create_first_page(ioc_detided, gauges, area):
     return fig
 
 
-def create_subsequent_pages(df, obs_root, gauges, start_index):
+def create_subsequent_pages(df: pd.DataFrame, obs_root: str, gauges: xr.Dataset, start_index: int):
     """
     Create subsequent pages of the surge report with time series plots.
     """
-    fig = plt.figure(figsize=(21, 29.7), constrained_layout = True)  # A4 format
+    fig = plt.figure(figsize=(21*CM, 29.7*CM), constrained_layout = True)  # A4 format
     outgs = GridSpec(4, 2, figure=fig)  # Adjust grid dimensions as needed
     plt.axis('off')
     if start_index + 8 < len(df): 
@@ -297,14 +329,14 @@ def create_storm_surge_report(start, end, regions, storm_name, wdir):
 
                 if not ioc_clean.empty:
                     gauges = xr.open_dataset(os.path.join(wdir, 'stations.nc'))
-                    skill_regional = compute_surge_comparison_serial(ioc_clean, os.path.join(obs_root, 'surge'), gauges)
+                    skill_regional = compute_surge_comparison_serial(ioc_clean, obs_root, gauges)
                     skill_results = pd.concat([skill_results, skill_regional])
 
                     if not skill_regional.empty:
                         ioc_detided = skill_regional.merge(SEASET_CATALOG[['ioc_code', 'longitude', 'latitude', 'Station_Name']], how='left', left_on=skill_regional.index, right_on='ioc_code')
                         Npages = int(len(ioc_detided) / 8) + 2
 
-                        # First page
+                        # # First page
                         fig = create_first_page(ioc_detided, gauges, area)
                         pdf.savefig(fig)
                         plt.close(fig)
@@ -336,7 +368,7 @@ def create_skill_report(wdir):
         clean_and_select_ioc(ioc_raw, START, NOW, obs_root)
         ioc_clean = ioc_subset_from_files_in_folder(ioc_raw, os.path.join(obs_root, 'clean'), ext='.csv')
 
-        if not ioc_clean.empty:
+        if len(ioc_clean)>0:
             gauges = xr.open_dataset(os.path.join(wdir, 'stations.nc'))
             skill_regional = compute_surge_comparison_serial(ioc_clean, os.path.join(obs_root, 'surge'), gauges)
 
@@ -344,7 +376,7 @@ def create_skill_report(wdir):
                 ioc_detided = skill_regional.merge(SEASET_CATALOG[['ioc_code', 'longitude', 'latitude', 'Station_Name']], how='left', left_on=skill_regional.index, right_on='ioc_code')
 
                 # Creating the figure in landscape format
-                fig, map_ax = plt.subplots(figsize=(29.7, 21))  # A4 landscape
+                fig, map_ax = plt.subplots(figsize=(29.7*CM, 21*CM))  # A4 landscape
                 plot_stations_map(ioc_detided, 'RMSE', 0, 1, map_ax, tmin, open_azure_file(select_azure_file(tmin), STORAGE_AZ))
 
                 pdf.savefig(fig, orientation='portrait')

@@ -1,6 +1,5 @@
 
 import azure.identity
-import os
 import pandas as pd
 
 def get_credential() -> azure.identity.ChainedTokenCredential:
@@ -40,8 +39,10 @@ OPTS = { # tidal analysis options
     "lat": None,
     "verbose": False,
 }  # careful if there is only one Nan parameter, the analysis crashes
+# plot
+PROPS = dict(boxstyle='round', facecolor='white', alpha=0.5)
 
-
+# 
 COASTLINES = { # tuple of lon min, lon max, lat min, lat max
     "UK East": (-1.76, 1.76, 51.0, 55.81),  # East coast of the UK from roughly the Thames estuary to the Scottish border
     "Denmark and Germany": (6.0, 14.0, 53.39, 57.75),  # German North Sea coastline
