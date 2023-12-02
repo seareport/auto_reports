@@ -21,9 +21,10 @@ from data_process import (ensure_directory,
                           get_model_data, 
                           get_obs_data, clean_and_select_ioc, 
                           compute_surge_comparison_serial,
+                          compute_surge_comparison,
                           ioc_subset_from_files_in_folder, 
                           get_storm_peak_time, avg_ts)
-from common import CONTAINER, COASTLINES, SEASET_CATALOG, STORAGE_AZ, NOW, START, PROPS
+from common import CONTAINER, COASTLINES, SEASET_CATALOG, STORAGE_AZ, NOW, START, PROPS, WHITE_STROKE
 
 CM = 1/1.5
 
@@ -167,7 +168,11 @@ def plot_time_series(df:pd.DataFrame, obs_d: str, ds: xr.Dataset, ax = None, avg
         sim.reindex(index=pd.date_range(obs.index.min(), obs.index.max(), freq='10min')).plot(ax=ax, label=str(label)+' model')
         for col in obs.columns:
             ts = sim.idxmax() #
-            error = get_storm_error(obs[col], sim, ts)
+            try:
+                error = get_storm_error(obs[col], sim, ts)
+            except Exception as e: 
+                print('failed computing storm surge error', e, station, ts, obs[col].index, sim.index)
+                error = np.nan
             textstr = f'error at peak surge {error}%'
             if avg: 
                 fit =  - sim.mean() + obs[col].mean()
@@ -193,7 +198,10 @@ def plot_map_availability(ioc_detided, ax = None, bbox: shapely.box = None):
         ax.set_ylim([bbox.bounds[1]-0.5, bbox.bounds[3]+0.5])
     SEASET_CATALOG.plot.scatter(ax=ax, x='longitude', y='latitude' , s=2, c='k', label= 'All Seaset Stations')
     colors = np.array([plt.colormaps['tab10'](np.random.rand()) for i in range(len(ioc_detided))])
-    ioc_detided.plot.scatter(ax=ax, x='longitude', y='latitude', s = 50,  label= 'IOC with successly detided data', c=colors)
+    ioc_detided.plot.scatter(ax=ax, x='longitude', y='latitude', s = 50,  label= 'IOC with detided data', c=colors)
+    for idx, row in ioc_detided.iterrows():
+        ax.text( row.longitude, row.latitude,  str(row['ioc_code']), fontsize=8, ha='right', va='bottom', path_effects=WHITE_STROKE)
+        
     return colors
 
 
@@ -213,13 +221,19 @@ def plot_simple_azure(ts: pd.Timestamp, ds:xr.Dataset, ax = None, bbox: shapely.
     ax.axis('scaled')
     return im
 
+
+def wrap_text(text, width):
+    """ Wrap text to a specified width. """
+    return '\n'.join(text[i:i+width] for i in range(0, len(text), width))
+
+
 def plot_table_stats(df, ax=None, colors = None): 
     if ax is None: 
         fig, ax = plt.subplots(figsize=(10, 3))  # Adjust the figure size as necessary
     plt.tight_layout()
     ax.axis('tight')
     ax.axis('off')
-    df_ = df[['Station_Name','BIAS or mean error',
+    df_ = df[['ioc_code','Station_Name','BIAS or mean error',
                 "RMSE","Standard deviation of residuals",
                 "Correlation Coefficient", "R^2"]]
     df_ = df_.rename(columns={
@@ -228,19 +242,31 @@ def plot_table_stats(df, ax=None, colors = None):
             "RMSE": "RMS", 
             "Standard deviation of residuals": "Std Dev", 
             "Correlation Coefficient": "Corr", })
-    column_labels = ['Station', 'Bias', 'RMS', 'Std Dev', 'Corr', 'R^2']
+    column_labels = ['ioc_code','Station', 'Bias', 'RMS', 'Std Dev', 'Corr', 'R^2']
+    df_[['Bias', 'RMS', 'Std Dev']] = df_[['Bias', 'RMS', 'Std Dev']].round(2)
+
+    # Wrap text for each cell
+    df_ = df_.applymap(lambda x: wrap_text(str(x), width=8))  # Adjust 'width' as needed
+
     hex = ['#%02x%02x%02x' % (int(RBG[0]), int(RBG[1]), int(RBG[2])) for RBG in colors*255 ] 
     c_=  np.repeat([hex], len(column_labels), axis = 0).T
     # Creating the table
-    table = ax.table(cellText=df_.round(2).values, colLabels=column_labels, loc='center', cellColours=c_)
+    table = ax.table(cellText=df_.values, colLabels=column_labels, loc='center', cellColours=c_) 
+    table.set_fontsize(12)  # Set a larger font size
+    table.auto_set_column_width(col=list(range(len(column_labels))))  # Adjust the column widths
+     # Manually adjust the width of the 'Station' column (assuming it's the first column)
+    for key, cell in table.get_celld().items():
+        if key[1] == 1:  # Column 1 is 'Station'
+            cell.set_width(40)  # Set the width as needed (e.g., 0.2)
+
     return df_
 
 def select_azure_file(t_: pd.Timestamp):
-    t_rounded = t_.round(freq='12H')
-    if t_rounded > t_:
-        t_azure = t_rounded
-    else : 
-        t_azure = t_rounded - pd.Timedelta(hours=12)
+    # If the time is exactly at a 12-hour mark, use the previous file
+    if t_.hour % 12 == 0:
+        t_azure = t_ - pd.Timedelta(hours=12)
+    else:
+        t_azure = t_.floor('12H')
     file = t_azure.strftime("%Y%m%d.%H.zarr") 
     fn = f"az://{CONTAINER}/{file}"
     return fn
@@ -329,7 +355,7 @@ def create_storm_surge_report(start, end, regions, storm_name, wdir):
 
                 if not ioc_clean.empty:
                     gauges = xr.open_dataset(os.path.join(wdir, 'stations.nc'))
-                    skill_regional = compute_surge_comparison_serial(ioc_clean, obs_root, gauges)
+                    skill_regional = compute_surge_comparison_serial(ioc_clean, obs_root, gauges, 'id', 'elev_sim', 'IOC-')
                     skill_results = pd.concat([skill_results, skill_regional])
 
                     if not skill_regional.empty:
@@ -345,17 +371,25 @@ def create_storm_surge_report(start, end, regions, storm_name, wdir):
                         for ip in range(0, Npages-1):
                             fig = create_subsequent_pages(ioc_detided, obs_root, gauges, ip * 8)
                             pdf.savefig(fig)
-                            plt.close(fig)        
-
+                            plt.close(fig)
+                            
             skill_results.to_csv(skill_file)
 
         except Exception as e:
             logging.error(f"Error in processing region {region}: {e}")
 
 
-def create_skill_report(wdir):
-    tmin = START.strftime("%Y-%m-%d")
-    tmax = NOW.strftime("%Y-%m-%d")
+def create_skill_report(wdir, ds_source = 'stations.nc'):
+    if isinstance(ds_source, str):
+        gauges = xr.open_dataset(os.path.join(wdir, 'stations.nc'))
+    elif isinstance(ds_source, list): 
+        gauges = xr.open_mfdataset(ds_source)
+        # 
+    start = pd.Timestamp(gauges.time.min().values)
+    end = pd.Timestamp(gauges.time.max().values)
+    tmin = start.strftime("%Y-%m-%d")
+    tmax = end.strftime("%Y-%m-%d")
+    
     obs_root = os.path.join(wdir, f'obs/{tmin}_{tmax}')
     dirs = ['raw', 'clean', 'surge']
 
@@ -365,13 +399,13 @@ def create_skill_report(wdir):
     report_path = os.path.join(wdir, 'reports', f'skill_report_{tmin}_{tmax}.pdf')
     with mpdf.PdfPages(report_path) as pdf:
         ioc_raw = SEASET_CATALOG[~SEASET_CATALOG.ioc_code.isna()]
-        clean_and_select_ioc(ioc_raw, START, NOW, obs_root)
+        clean_and_select_ioc(ioc_raw, start, end, obs_root)
         ioc_clean = ioc_subset_from_files_in_folder(ioc_raw, os.path.join(obs_root, 'clean'), ext='.csv')
-
         if len(ioc_clean)>0:
-            gauges = xr.open_dataset(os.path.join(wdir, 'stations.nc'))
-            skill_regional = compute_surge_comparison_serial(ioc_clean, os.path.join(obs_root, 'surge'), gauges)
-
+            skill_regional = compute_surge_comparison(ioc_clean, os.path.join(obs_root), gauges, 'ioc_code', 'elev', '')
+                
+            skill_file = os.path.join(wdir, f'skill_{tmin}-{tmax}.csv')
+            skill_regional.to_csv(skill_file)
             if not skill_regional.empty:
                 ioc_detided = skill_regional.merge(SEASET_CATALOG[['ioc_code', 'longitude', 'latitude', 'Station_Name']], how='left', left_on=skill_regional.index, right_on='ioc_code')
 
@@ -382,7 +416,3 @@ def create_skill_report(wdir):
                 pdf.savefig(fig, orientation='portrait')
                 plt.close(fig)
 
-# 
-if __name__=="__main__": 
-    WORKDIR = os.path.join(os.path.dirname(os.path.realpath(__file__)))
-    create_skill_report(WORKDIR)

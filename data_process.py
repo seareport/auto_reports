@@ -13,9 +13,11 @@ from pyposeidon.utils.statistics import get_stats
 from analysea.utils import cleanup, detect_time_step,completeness
 from analysea.tide import detide
 from searvey.multi import multiprocess
+import observer
 
 # global variables
 from common import BASE_URL, VALID_SENSORS, KURTOSIS_THRESHOLD, NCPU, OPTS
+from typing import List, Dict, Tuple, Union, Optional, Any
 
 #  DATA - FOLDERS
 def ensure_directory(path: str) -> None:
@@ -76,6 +78,14 @@ def generate_dicts(stations: pd.DataFrame, start: pd.Timestamp,end: pd.Timestamp
     return dicts
 
 
+def generate_dicts2(stations: pd.DataFrame, start: pd.Timestamp,end: pd.Timestamp, obs_root: str) -> list[str]:
+    dicts = []
+    for ioc_code in stations.ioc_code:
+        st_ = start.strftime("%Y-%m-%d")
+        en_ = end.strftime("%Y-%m-%d")
+        dicts.append(dict( station = ioc_code, min_time = st_, max_time = en_, obs_root=obs_root))
+    return dicts
+
 def process_url(url):
     df = pd.read_json(url)
     if df.empty or len(df)<1:
@@ -83,6 +93,11 @@ def process_url(url):
     df = normalize_df(df)
     return df
 
+def get_station(station:str, no_years: int = 2) -> pd.DataFrame:
+    df = observer.read_ioc_df(station, no_years=no_years) # 2 years is default
+    if df.empty or len(df)<1:
+        return pd.DataFrame()
+    return df
 
 def write_df(df, fout): 
     if fout.endswith('.csv'):
@@ -107,12 +122,24 @@ def clean_one_ioc(url:str,station: str, min_time:str, max_time:str, obs_root: st
         if len(df)>0:
             write_df(df,fileClean)
 
+def clean_one_ioc2( station: str,  min_time:str, max_time:str, obs_root: str, format = 'csv') -> None:
+    #  read station data
+    obs_clean = os.path.join(obs_root,"clean")
+    fileClean = f"{obs_clean}/{station}.{format}"
+    Nyear = pd.Timestamp.now().year - pd.Timestamp(min_time).year + 1
+    ts = get_station(station, no_years=Nyear)
+    time_filter = (ts.index >= min_time) & (ts.index <= max_time)
+    ts = ts[time_filter]
+    df = cleanup(ts, kurtosis=KURTOSIS_THRESHOLD)
+    if len(df)>0:
+        write_df(df,fileClean)
     
 def clean_and_select_ioc(stations:pd.DataFrame, tmin : pd.Timestamp, tmax: pd.Timestamp, obs_root:str) -> None:
     logging.info("cleaning selected stations..")
-    ioc_to_clean = generate_dicts(stations, tmin, tmax, obs_root)
+    ioc_to_clean = generate_dicts2(stations, tmin, tmax, obs_root)
     multiprocess(
-        clean_one_ioc,
+        # clean_one_ioc,
+        clean_one_ioc2, #with the observer package
         ioc_to_clean,
         n_workers=NCPU, ##!!CAREFUL!! here adapt the numper of procs to your machine !
         disable_progress_bar=False,
@@ -137,18 +164,24 @@ def convert_zarr_to_netcdf(fn,storage_options,  fout ):
         ds_model.to_netcdf(fout)
 
 
-def get_model_data(ds: xr.Dataset, station: str): 
-    ix = np.where(ds.id.values == 'IOC-' + station)[0]
+def get_model_data(
+        ds: xr.Dataset, 
+        station: str, 
+        id_column: str = 'id', 
+        elev_column: str = 'elev_sim', 
+        prefix: str = 'IOC-'
+    ) -> pd.DataFrame:
+    ix = np.where(ds[id_column].values == prefix + station)[0]
     if len(ix) == 1:
-        tg = ds[dict(id=ix)]
-        tg2 = tg.to_dataframe()
-        sim = tg2.reset_index(level='id').drop(columns='id')
-        return sim['elev_sim']
+        tg = ds[{id_column: ix}]
+        tg_df = tg.to_dataframe()
+        sim = tg_df.reset_index(level=id_column).drop(columns=id_column)
+        return sim[elev_column]
     else: 
         return pd.DataFrame()
 
 
-def compute_stats(obs,sim): 
+def compute_stats(obs: pd.DataFrame, sim: pd.DataFrame) -> pd.DataFrame: 
     # compare time steps: because otherwise reindex induces error
     # https://github.com/ec-jrc/pyPoseidon/blob/d32f16bee6968426f143f060f62d4ee37d9f0fca/pyposeidon/utils/statistics.py#L38C22-L38C22
     try: 
@@ -160,7 +193,7 @@ def compute_stats(obs,sim):
             stats = get_stats(sim,obs)
         return stats
     except Exception as e:
-        logging.error(f"Failed to compute stats: {e}")
+        logging.error(f"Failed to compute stats: {e}\n > obs \n{obs.head()} \n > sim \n{sim.head()}" )
         return pd.DataFrame()
 
 
@@ -169,8 +202,9 @@ def compare_one_ioc(station:str,
                     obs_root:str, 
                     opts:dict, 
                     ds_model:xr.Dataset, 
-                    plot: bool = False,
-                    avg: bool = True,
+                    id_column: str,
+                    elev_column: str,
+                    prefix: str,
     ) -> pd.DataFrame():
     obs_data = get_obs_data(os.path.join(obs_root, "clean"),station)
     local_opts = opts.copy()
@@ -179,7 +213,7 @@ def compare_one_ioc(station:str,
         ss = obs_data[sensor]
         # detide
         obs= detide(ss,local_opts)
-        sim = get_model_data(ds_model, station) 
+        sim = get_model_data(ds_model, station, id_column, elev_column, prefix) 
         stats = compute_stats(obs, sim)
         if len(obs)>0:
             write_df(obs.to_frame(), os.path.join(obs_root, 'surge', station+'.csv') ) 
@@ -191,7 +225,10 @@ def compare_one_ioc(station:str,
 def generate_ioc_comparison_inputs(stations: pd.DataFrame, 
                                    obs_folder:str, 
                                    opts: dict,
-                                   ds_model:xr.Dataset):
+                                   ds_model:xr.Dataset, 
+                                   id_column: str,
+                                   elev_column: str,
+                                   prefix: str) -> List[dict]:
     inputs = []
     for i_s, station in enumerate(stations.ioc_code):
         lat = stations.iloc[i_s].latitude
@@ -199,19 +236,28 @@ def generate_ioc_comparison_inputs(stations: pd.DataFrame,
                            lat=lat,
                            obs_root=obs_folder, 
                            opts=opts,
-                           ds_model=ds_model))
+                           ds_model=ds_model, 
+                           id_column= id_column,
+                           elev_column= elev_column,
+                           prefix= prefix))
     return inputs
 
 
 def compute_surge_comparison(stations: pd.DataFrame, 
                              obs_folder:str, 
                              ds_model:xr.Dataset,
+                             id_column: str,
+                             elev_column: str,
+                             prefix: str,
                              opts:dict = OPTS):    
     logging.info("Computing model vs obs surge comparison..")
     inputs = generate_ioc_comparison_inputs(stations, 
                                            obs_folder, 
                                            opts, 
-                                           ds_model)
+                                           ds_model,
+                                           id_column,
+                                           elev_column,
+                                           prefix)
     # the line equation:
     results = multiprocess(
         compare_one_ioc,
@@ -228,12 +274,18 @@ def compute_surge_comparison(stations: pd.DataFrame,
 def compute_surge_comparison_serial(stations: pd.DataFrame, 
                              obs_folder:str, 
                              ds_model:xr.Dataset,
-                             opts:dict = OPTS):    
+                             id_column: str,
+                             elev_column: str,
+                             prefix: str,
+                             opts:dict = OPTS):  
     logging.info("Computing model vs obs surge comparison.. (sequential execution)")
     inputs = generate_ioc_comparison_inputs(stations, 
                                            obs_folder, 
                                            opts, 
-                                           ds_model)
+                                           ds_model,
+                                           id_column,
+                                           elev_column,
+                                           prefix)
     # the line equation:
     res = pd.DataFrame()
     for inp in inputs:

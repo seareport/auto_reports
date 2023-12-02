@@ -1,6 +1,7 @@
 
 import azure.identity
 import pandas as pd
+import matplotlib.patheffects as pe
 
 def get_credential() -> azure.identity.ChainedTokenCredential:
    credential_chain = (
@@ -41,7 +42,7 @@ OPTS = { # tidal analysis options
 }  # careful if there is only one Nan parameter, the analysis crashes
 # plot
 PROPS = dict(boxstyle='round', facecolor='white', alpha=0.5)
-
+WHITE_STROKE = [pe.withStroke(linewidth=2, foreground='w')]
 # 
 COASTLINES = { # tuple of lon min, lon max, lat min, lat max
     "UK East": (-1.76, 1.76, 51.0, 55.81),  # East coast of the UK from roughly the Thames estuary to the Scottish border
