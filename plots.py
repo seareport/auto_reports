@@ -541,7 +541,7 @@ def create_skill_report(wdir, ds_source="stations.nc"):
             ioc_raw, os.path.join(obs_root, "clean"), ext=".csv"
         )
         if len(ioc_clean) > 0:
-            skill_regional = compute_surge_comparison(
+            skill_regional = compute_surge_comparison_serial(
                 ioc_clean, os.path.join(obs_root), gauges, "ioc_code", "elev", ""
             )
 

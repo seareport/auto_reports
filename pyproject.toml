@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "auto-reports"
+version = "0.1.0"
+description = ""
+authors = ["tomsail <saillour.thomas@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+observer = { git = "https://github.com/seareport/observer.git" }
+analysea = { git = "https://github.com/seareport/analysea.git" }
+pyposeidon = { git = "https://github.com/ec-jrc/pyPoseidon.git" }
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
