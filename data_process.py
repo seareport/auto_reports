@@ -89,16 +89,10 @@ def generate_dicts(
     return dicts
 
 
-def generate_dicts2(
-    stations: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp, obs_root: str
-) -> list[str]:
+def generate_dicts2(stations: pd.DataFrame, obs_root: str) -> list[str]:
     dicts = []
     for ioc_code in stations.ioc_code:
-        st_ = start.strftime("%Y-%m-%d")
-        en_ = end.strftime("%Y-%m-%d")
-        dicts.append(
-            dict(station=ioc_code, min_time=st_, max_time=en_, obs_root=obs_root)
-        )
+        dicts.append(dict(station=ioc_code, obs_root=obs_root))
     return dicts
 
 
@@ -110,11 +104,25 @@ def process_url(url):
     return df
 
 
-def get_station(station: str, no_years: int = 2) -> pd.DataFrame:
-    df = observer.read_ioc_df(station, no_years=no_years)  # 2 years is default
-    if df.empty or len(df) < 1:
-        return pd.DataFrame()
-    return df
+def get_stations(
+    ioc_df: List[str],
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    obs_folder: str,
+    suffix=".csv",
+) -> pd.DataFrame:
+    os.makedirs(obs_folder, exist_ok=True)
+    # scrape using observer
+    data = observer.scrape_ioc(
+        ioc_codes=ioc_df.ioc_code, start_date=start, end_date=end
+    )
+    # write all non empty dataframe
+    for station in data.keys():
+        if not data[station].empty:
+            df = data[station]
+            write_df(df, os.path.join(obs_folder, station + suffix))
+
+    return ioc_subset_from_files_in_folder(ioc_df, obs_folder, ext=suffix)
 
 
 def write_df(df, fout):
@@ -126,64 +134,36 @@ def write_df(df, fout):
         raise ValueError(f"format {format} not supported")
 
 
-def clean_one_ioc(
-    url: str, station: str, min_time: str, max_time: str, obs_root: str, format="csv"
-) -> None:
+def read_df(fin):
+    if fin.endswith(".csv"):
+        df = pd.read_csv(fin, index_col=0, parse_dates=True)
+    elif fin.endswith(".parquet"):
+        df = pd.read_parquet(fin)
+    else:
+        raise ValueError(f"format {format} not supported")
+    return df
+
+
+def clean_one_ioc(station: str, obs_root: str, suffix=".csv") -> None:
     #  read station data
     obs_raw = os.path.join(obs_root, "raw")
     obs_clean = os.path.join(obs_root, "clean")
-    file = f"{obs_raw}/{station}.{format}"
-    fileClean = f"{obs_clean}/{station}.{format}"
-    if ~os.path.exists(file):
-        ts = process_url(url)
-        write_df(ts, file)
-    if ~os.path.exists(fileClean):
-        df = cleanup(ts, kurtosis=KURTOSIS_THRESHOLD)
-        if len(df) > 0:
-            write_df(df, fileClean)
-
-
-def clean_one_ioc2(
-    station: str, min_time: str, max_time: str, obs_root: str, format="csv"
-) -> None:
-    #  read station data
-    obs_clean = os.path.join(obs_root, "clean")
-    fileClean = f"{obs_clean}/{station}.{format}"
-    Nyear = pd.Timestamp.now().year - pd.Timestamp(min_time).year + 1
-    ts = get_station(station, no_years=Nyear)
-    time_filter = (ts.index >= min_time) & (ts.index <= max_time)
-    ts = ts[time_filter]
+    fileClean = f"{obs_clean}/{station}{suffix}"
+    ts = read_df(os.path.join(obs_raw, station + suffix))
     df = cleanup(ts, kurtosis=KURTOSIS_THRESHOLD)
     if len(df) > 0:
         write_df(df, fileClean)
 
 
-def clean_and_select_ioc(
-    stations: pd.DataFrame, tmin: pd.Timestamp, tmax: pd.Timestamp, obs_root: str
-) -> None:
+def clean_and_select_ioc(stations: pd.DataFrame, obs_root: str) -> None:
     logging.info("cleaning selected stations..")
-    ioc_to_clean = generate_dicts2(stations, tmin, tmax, obs_root)
+    ioc_to_clean = generate_dicts2(stations, obs_root)
     multiprocess(
-        # clean_one_ioc,
-        clean_one_ioc2,  # with the observer package
+        clean_one_ioc,  # with the observer package
         ioc_to_clean,
         n_workers=NCPU,  ##!!CAREFUL!! here adapt the numper of procs to your machine !
         disable_progress_bar=False,
     )
-
-
-def get_obs_data(obs_folder: str, station: str, format: str = "csv") -> pd.DataFrame:
-    filein = os.path.join(obs_folder, station + "." + format)
-    try:
-        if not os.path.exists(filein):
-            return pd.DataFrame()
-        if format == "csv":
-            return pd.read_csv(filein, index_col=0, parse_dates=True)
-        elif format == "parquet":
-            return pd.read_parquet(filein)
-    except Exception as e:
-        logging.error(f"Failed to read {filein}: {e}")
-        return pd.DataFrame()
 
 
 def convert_zarr_to_netcdf(fn, storage_options, fout):
@@ -216,8 +196,13 @@ def compute_stats(obs: pd.DataFrame, sim: pd.DataFrame) -> pd.DataFrame:
     try:
         ts_sim = detect_time_step(sim)
         ts_obs = detect_time_step(obs)
+
+        obs = obs.dropna()
+        sim = sim.dropna()
+
         if ts_obs < ts_sim:
             stats = get_stats(obs, sim)
+            stats["BIAS or mean error"] = -stats["BIAS or mean error"]
         else:
             stats = get_stats(sim, obs)
         return stats
@@ -233,19 +218,16 @@ def compare_one_ioc(
     lat: float,
     obs_root: str,
     opts: dict,
-    ds_model: xr.Dataset,
-    id_column: str,
-    elev_column: str,
-    prefix: str,
 ) -> pd.DataFrame():
-    obs_data = get_obs_data(os.path.join(obs_root, "clean"), station)
+    obs_data = read_df(os.path.join(obs_root, "clean", station + ".csv"))
+    sim = read_df(os.path.join(obs_root, "model", station + ".csv"))
+    sim = sim.iloc[:, 0]  # take only the first column, whatever its name
     local_opts = opts.copy()
     local_opts["lat"] = lat
     for sensor in obs_data.columns:
         ss = obs_data[sensor]
         # detide
         obs = detide(ss, local_opts)
-        sim = get_model_data(ds_model, station, id_column, elev_column, prefix)
         stats = compute_stats(obs, sim)
         if len(obs) > 0:
             write_df(obs.to_frame(), os.path.join(obs_root, "surge", station + ".csv"))
@@ -257,45 +239,44 @@ def compare_one_ioc(
 
 
 def generate_ioc_comparison_inputs(
-    stations: pd.DataFrame,
-    obs_folder: str,
-    opts: dict,
-    ds_model: xr.Dataset,
-    id_column: str,
-    elev_column: str,
-    prefix: str,
+    stations: pd.DataFrame, obs_folder: str, opts: dict
 ) -> List[dict]:
     inputs = []
     for i_s, station in enumerate(stations.ioc_code):
         lat = stations.iloc[i_s].latitude
-        inputs.append(
-            dict(
-                station=station,
-                lat=lat,
-                obs_root=obs_folder,
-                opts=opts,
-                ds_model=ds_model,
-                id_column=id_column,
-                elev_column=elev_column,
-                prefix=prefix,
-            )
-        )
+        inputs.append(dict(station=station, lat=lat, obs_root=obs_folder, opts=opts))
     return inputs
+
+
+def extract_from_ds(
+    stations: pd.DataFrame,
+    work_folder: str,
+    ds_model: xr.Dataset,
+    id_column: str,
+    elev_column: str,
+    prefix: str,
+) -> pd.DataFrame:
+    #
+    os.makedirs(work_folder, exist_ok=True)
+    #
+    for id in stations[id_column]:
+        sim = get_model_data(ds_model, id, id_column, elev_column, prefix)
+        if len(sim) > 0:
+            sim.resample("10min").mean().shift(freq="5min").to_csv(
+                os.path.join(work_folder, id + ".csv")
+            )
+
+    extracted = ioc_subset_from_files_in_folder(stations, work_folder, ext=".csv")
+    return extracted
 
 
 def compute_surge_comparison(
     stations: pd.DataFrame,
     obs_folder: str,
-    ds_model: xr.Dataset,
-    id_column: str,
-    elev_column: str,
-    prefix: str,
     opts: dict = OPTS,
 ):
     logging.info("Computing model vs obs surge comparison..")
-    inputs = generate_ioc_comparison_inputs(
-        stations, obs_folder, opts, ds_model, id_column, elev_column, prefix
-    )
+    inputs = generate_ioc_comparison_inputs(stations, obs_folder, opts)
     # the line equation:
     results = multiprocess(
         compare_one_ioc,
@@ -312,19 +293,17 @@ def compute_surge_comparison(
 def compute_surge_comparison_serial(
     stations: pd.DataFrame,
     obs_folder: str,
-    ds_model: xr.Dataset,
-    id_column: str,
-    elev_column: str,
-    prefix: str,
     opts: dict = OPTS,
 ):
     logging.info("Computing model vs obs surge comparison.. (sequential execution)")
     inputs = generate_ioc_comparison_inputs(
-        stations, obs_folder, opts, ds_model, id_column, elev_column, prefix
+        stations,
+        obs_folder,
+        opts,
     )
     # the line equation:
     res = pd.DataFrame()
-    for inp in inputs:
+    for i_, inp in enumerate(inputs):
         result = compare_one_ioc(**inp)
         res = pd.concat([res, result])
     return res

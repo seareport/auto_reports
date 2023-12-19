@@ -20,10 +20,12 @@ import thalassa
 from data_process import (
     ensure_directory,
     get_model_data,
-    get_obs_data,
     clean_and_select_ioc,
+    get_stations,
+    # compute_surge_comparison,
+    read_df,
     compute_surge_comparison_serial,
-    compute_surge_comparison,
+    extract_from_ds,
     ioc_subset_from_files_in_folder,
     get_storm_peak_time,
     avg_ts,
@@ -201,7 +203,7 @@ def plot_side_histograms(df, ax_horizontal, ax_vertical, value_col, vmin, vmax):
 
 def plot_time_series(df: pd.DataFrame, obs_d: str, ds: xr.Dataset, ax=None, avg=False):
     station = df.ioc_code
-    obs = get_obs_data(obs_d, station)
+    obs = read_df(obs_d, station + ".csv")
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
     label = df.Station_Name
@@ -536,14 +538,18 @@ def create_skill_report(wdir, ds_source="stations.nc"):
     report_path = os.path.join(wdir, "reports", f"skill_report_{tmin}_{tmax}.pdf")
     with mpdf.PdfPages(report_path) as pdf:
         ioc_raw = SEASET_CATALOG[~SEASET_CATALOG.ioc_code.isna()]
-        clean_and_select_ioc(ioc_raw, start, end, obs_root)
+        # 0 download the stations
+        ioc_avail = get_stations(ioc_raw, start, end, obs_root + "/raw")
+        # 1 clean the stations
+        clean_and_select_ioc(ioc_avail, obs_root)
         ioc_clean = ioc_subset_from_files_in_folder(
             ioc_raw, os.path.join(obs_root, "clean"), ext=".csv"
         )
         if len(ioc_clean) > 0:
-            skill_regional = compute_surge_comparison_serial(
-                ioc_clean, os.path.join(obs_root), gauges, "ioc_code", "elev", ""
+            model = extract_from_ds(
+                ioc_clean, obs_root + "/model", gauges, "ioc_code", "elev", ""
             )
+            skill_regional = compute_surge_comparison_serial(model, obs_root)
 
             skill_file = os.path.join(wdir, f"skill_{tmin}-{tmax}.csv")
             skill_regional.to_csv(skill_file)
@@ -566,7 +572,6 @@ def create_skill_report(wdir, ds_source="stations.nc"):
                     1,
                     map_ax,
                     tmin,
-                    open_azure_file(select_azure_file(tmin), STORAGE_AZ),
                 )
 
                 pdf.savefig(fig, orientation="portrait")
