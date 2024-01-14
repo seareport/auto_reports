@@ -15,7 +15,15 @@ from searvey.multi import multiprocess
 import observer
 
 # global variables
-from common import BASE_URL, VALID_SENSORS, KURTOSIS_THRESHOLD, NCPU, OPTS
+from common import (
+    BASE_URL,
+    VALID_SENSORS,
+    KURTOSIS_THRESHOLD,
+    NCPU,
+    OPTS,
+    STORAGE_AZ,
+    CONTAINER,
+)
 from typing import List
 
 
@@ -74,16 +82,21 @@ def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_dicts(
-    stations: pd.DataFrame, start: pd.Timestamp, end: pd.Timestamp, obs_root: str
+    stations: pd.DataFrame,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    obs_root: str,
+    suffix: str = ".csv",
 ) -> list[str]:
     dicts = []
     for ioc_code in stations.ioc_code:
-        st_ = start.strftime("%Y-%m-%d")
-        en_ = end.strftime("%Y-%m-%d")
-        url = BASE_URL.format(ioc_code=ioc_code, start=st_, end=en_)
         dicts.append(
             dict(
-                url=url, station=ioc_code, min_time=st_, max_time=en_, obs_root=obs_root
+                station=ioc_code,
+                start=start,
+                end=end,
+                obs_folder=obs_root,
+                suffix=suffix,
             )
         )
     return dicts
@@ -94,14 +107,6 @@ def generate_dicts2(stations: pd.DataFrame, obs_root: str) -> list[str]:
     for ioc_code in stations.ioc_code:
         dicts.append(dict(station=ioc_code, obs_root=obs_root))
     return dicts
-
-
-def process_url(url):
-    df = pd.read_json(url)
-    if df.empty or len(df) < 1:
-        return pd.DataFrame()
-    df = normalize_df(df)
-    return df
 
 
 def get_stations(
@@ -122,6 +127,35 @@ def get_stations(
             df = data[station]
             write_df(df, os.path.join(obs_folder, station + suffix))
 
+
+def get_one_ioc(
+    station: str, start: pd.Timestamp, end: pd.Timestamp, obs_folder: str, suffix=".csv"
+):
+    # scrape using observer
+    no_years = pd.Timestamp.now().year - start.year + 1
+    df = observer.get_ioc_df(station, no_years=no_years)
+    if len(df) > 0:
+        mask = (df.index >= start) & (df.index <= end)
+        df = df[mask]
+        if len(df) > 0:
+            write_df(df, os.path.join(obs_folder, station + suffix))
+
+
+def get_multi_ioc(
+    ioc_df: pd.DataFrame,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    obs_folder: str,
+    suffix=".csv",
+):
+    logging.info("cleaning selected stations..")
+    ioc_dict = generate_dicts(ioc_df, start, end, obs_folder, suffix)
+    multiprocess(
+        get_one_ioc,  # with the observer package
+        ioc_dict,
+        n_workers=NCPU,  ##!!CAREFUL!! here adapt the numper of procs to your machine !
+        disable_progress_bar=False,
+    )
     return ioc_subset_from_files_in_folder(ioc_df, obs_folder, ext=suffix)
 
 
@@ -218,6 +252,8 @@ def compare_one_ioc(
     lat: float,
     obs_root: str,
     opts: dict,
+    t_rsp: int = 30,
+    interp: bool = False,
 ) -> pd.DataFrame():
     obs_data = read_df(os.path.join(obs_root, "clean", station + ".csv"))
     sim = read_df(os.path.join(obs_root, "model", station + ".csv"))
@@ -226,8 +262,12 @@ def compare_one_ioc(
     local_opts["lat"] = lat
     for sensor in obs_data.columns:
         ss = obs_data[sensor]
+        # resample
+        h_rsmp = ss.resample(f"{t_rsp}min").mean().shift(freq=f"{int(t_rsp/2)}min")
         # detide
-        obs = detide(ss, local_opts)
+        obs = detide(h_rsmp, **local_opts)
+        if interp:
+            obs = obs.interpolate()
         stats = compute_stats(obs, sim)
         if len(obs) > 0:
             write_df(obs.to_frame(), os.path.join(obs_root, "surge", station + ".csv"))
@@ -255,16 +295,17 @@ def extract_from_ds(
     id_column: str,
     elev_column: str,
     prefix: str,
+    t_rsp: int = 30,
 ) -> pd.DataFrame:
     #
     os.makedirs(work_folder, exist_ok=True)
-    #
-    for id in stations[id_column]:
-        sim = get_model_data(ds_model, id, id_column, elev_column, prefix)
-        if len(sim) > 0:
-            sim.resample("10min").mean().shift(freq="5min").to_csv(
-                os.path.join(work_folder, id + ".csv")
-            )
+    # #
+    # for id in stations[id_column]:
+    #     sim = get_model_data(ds_model, id, id_column, elev_column, prefix)
+    #     if len(sim) > 0:
+    #         sim.resample(f"{t_rsp}min").mean().shift(freq=f"{int(t_rsp/2)}min").to_csv(
+    #             os.path.join(work_folder, id + ".csv")
+    #         )
 
     extracted = ioc_subset_from_files_in_folder(stations, work_folder, ext=".csv")
     return extracted

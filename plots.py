@@ -22,7 +22,8 @@ from data_process import (
     get_model_data,
     clean_and_select_ioc,
     get_stations,
-    # compute_surge_comparison,
+    get_multi_ioc,
+    compute_surge_comparison,
     read_df,
     compute_surge_comparison_serial,
     extract_from_ds,
@@ -117,10 +118,11 @@ def plot_stations_map(
         ax1 = divider.append_axes("bottom", size="3%", pad=0.3)
         ax2 = divider.append_axes("top", size="14%", pad=0.3)
         ax3 = divider.append_axes("right", size="10%", pad=0.3)
-        ax4 = divider.append_axes("right", size="2%", pad=0.3)
+
         ax2.sharex(ax)
         ax3.sharey(ax)
 
+        plot_wl = False
         countries = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
         _ = countries.plot(color="lightgrey", ax=ax, zorder=-1)
         if time is not None:
@@ -133,8 +135,10 @@ def plot_stations_map(
                 plt.colorbar(im, cax=ax1, orientation="horizontal").set_label(
                     "Elevation [m]"
                 )
-                ax.set_xlim([bbox.bounds[0] - 0.5, bbox.bounds[2] + 0.5])
-                ax.set_ylim([bbox.bounds[1] - 0.5, bbox.bounds[3] + 0.5])
+                plot_wl = True
+        if bbox is not None:
+            ax.set_xlim([bbox.bounds[0] - 0.5, bbox.bounds[2] + 0.5])
+            ax.set_ylim([bbox.bounds[1] - 0.5, bbox.bounds[3] + 0.5])
 
         normalized_values = normalize(skill[skill_param], vmin, vmax)
         im = ax.scatter(
@@ -145,11 +149,16 @@ def plot_stations_map(
             vmin=vmin,
             vmax=vmax,
             marker=".",
-            s=300,
+            s=50,
         )
         if colors is not None:
             im = ax.scatter(skill.longitude, skill.latitude, c=colors, marker=".", s=50)
-        plt.colorbar(im, cax=ax4).set_label(skill_param)
+
+        if plot_wl:
+            ax4 = divider.append_axes("right", size="2%", pad=0.3)
+            plt.colorbar(im, cax=ax4).set_label(skill_param)
+        else:
+            plt.colorbar(im, cax=ax1, orientation="horizontal").set_label(skill_param)
 
         plt.suptitle(
             f"Geographical distribution of {skill_param} differences for {len(skill)} tide gauges"
@@ -539,9 +548,9 @@ def create_skill_report(wdir, ds_source="stations.nc"):
     with mpdf.PdfPages(report_path) as pdf:
         ioc_raw = SEASET_CATALOG[~SEASET_CATALOG.ioc_code.isna()]
         # 0 download the stations
-        ioc_avail = get_stations(ioc_raw, start, end, obs_root + "/raw")
-        # 1 clean the stations
-        clean_and_select_ioc(ioc_avail, obs_root)
+        # ioc_avail = get_multi_ioc(ioc_raw, start, end, obs_root + "/raw", suffix='.parquet')
+        # # 1 clean the stations
+        # clean_and_select_ioc(ioc_avail, obs_root)
         ioc_clean = ioc_subset_from_files_in_folder(
             ioc_raw, os.path.join(obs_root, "clean"), ext=".csv"
         )
@@ -549,10 +558,10 @@ def create_skill_report(wdir, ds_source="stations.nc"):
             model = extract_from_ds(
                 ioc_clean, obs_root + "/model", gauges, "ioc_code", "elev", ""
             )
-            skill_regional = compute_surge_comparison_serial(model, obs_root)
+            skill_regional = compute_surge_comparison(model, obs_root)
 
             skill_file = os.path.join(wdir, f"skill_{tmin}-{tmax}.csv")
-            skill_regional.to_csv(skill_file)
+            skill_regional = pd.read_csv(skill_file, index_col=0)
             if not skill_regional.empty:
                 ioc_detided = skill_regional.merge(
                     SEASET_CATALOG[
@@ -564,15 +573,31 @@ def create_skill_report(wdir, ds_source="stations.nc"):
                 )
 
                 # Creating the figure in landscape format
-                fig, map_ax = plt.subplots(figsize=(29.7 * CM, 21 * CM))  # A4 landscape
-                plot_stations_map(
-                    ioc_detided,
-                    "RMSE",
-                    0,
-                    1,
-                    map_ax,
-                    tmin,
-                )
+                for region in [
+                    None,
+                    "Europe",
+                    "East Coast US + Gulf of Mexico",
+                    "Oceania",
+                    "West Coast US",
+                ]:
+                    if region is None:
+                        xmin, xmax, ymin, ymax = -180, 180, -90, 90
+                    else:
+                        xmin, xmax, ymin, ymax = COASTLINES[region]
+                    area = shapely.box(xmin, ymin, xmax, ymax)
+                    for param in ["RMSE", "Correlation Coefficient", "R^2"]:
+                        fig, map_ax = plt.subplots(
+                            figsize=(29.7 * CM, 21 * CM)
+                        )  # A4 landscape
+                        vmax = 1
+                        if param == "Correlation Coefficient":
+                            vmin = -1
+                        else:
+                            vmin = 0
+                        plot_stations_map(
+                            ioc_detided, param, vmin, vmax, map_ax, tmin, bbox=area
+                        )
+                        pdf.savefig(fig, orientation="portrait")
 
                 pdf.savefig(fig, orientation="portrait")
                 plt.close(fig)

@@ -8,7 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 observer = { git = "https://github.com/seareport/observer.git" }
-analysea = { git = "https://github.com/seareport/analysea.git" }
+analysea = { git = "https://github.com/seareport/analysea.git" , branch = "tide-chunk" }
 pyposeidon = { git = "https://github.com/ec-jrc/pyPoseidon.git" }
 
 [build-system]
