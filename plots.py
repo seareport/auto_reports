@@ -86,6 +86,15 @@ def get_storm_error(
     return error
 
 
+def get_stations_in_bbox(df, bbox):
+    def in_bbox(row):
+        point = shapely.Point(row["longitude"], row["latitude"])
+        return bbox.contains(point)
+
+    df["in_bbox"] = df.apply(in_bbox, axis=1)
+    return df[df["in_bbox"]]
+
+
 # PLOTS
 def plot_stations_map(
     skill,
@@ -139,6 +148,7 @@ def plot_stations_map(
         if bbox is not None:
             ax.set_xlim([bbox.bounds[0] - 0.5, bbox.bounds[2] + 0.5])
             ax.set_ylim([bbox.bounds[1] - 0.5, bbox.bounds[3] + 0.5])
+            skill = get_stations_in_bbox(skill, bbox)
 
         normalized_values = normalize(skill[skill_param], vmin, vmax)
         im = ax.scatter(
@@ -210,9 +220,10 @@ def plot_side_histograms(df, ax_horizontal, ax_vertical, value_col, vmin, vmax):
     ax_vertical.set_xlabel("Number of stations")
 
 
-def plot_time_series(df: pd.DataFrame, obs_d: str, ds: xr.Dataset, ax=None, avg=False):
+def plot_time_series(df: pd.DataFrame, obs_root: str, ax=None, avg=False):
     station = df.ioc_code
-    obs = read_df(obs_d, station + ".csv")
+    obs = read_df(os.path.join(obs_root, "surge", station + ".csv"))
+    sim = read_df(os.path.join(obs_root, "model", station + ".csv"))
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 5))
     label = df.Station_Name
@@ -220,26 +231,25 @@ def plot_time_series(df: pd.DataFrame, obs_d: str, ds: xr.Dataset, ax=None, avg=
         obs[sensor].reindex(
             index=pd.date_range(obs.index.min(), obs.index.max(), freq="10min")
         ).plot(ax=ax, label=str(label) + " measured", color="k", style=".")
-    sim = get_model_data(ds, station)
     ax.set_xlim([obs.index.min(), obs.index.max()])
     if not sim.empty and len(sim) > 0:
         sim.reindex(
             index=pd.date_range(obs.index.min(), obs.index.max(), freq="10min")
-        ).plot(ax=ax, label=str(label) + " model")
+        ).interpolate().plot(ax=ax, label=str(label) + " model")
         for col in obs.columns:
             ts = sim.idxmax()  #
-            try:
-                error = get_storm_error(obs[col], sim, ts)
-            except Exception as e:
-                print(
-                    "failed computing storm surge error",
-                    e,
-                    station,
-                    ts,
-                    obs[col].index,
-                    sim.index,
-                )
-                error = np.nan
+            # try:
+            #     error = get_storm_error(obs[col], sim, ts)
+            # except Exception as e:
+            #     print(
+            #         "failed computing storm surge error",
+            #         e,
+            #         station,
+            #         ts,
+            #         obs[col].index,
+            #         sim.index,
+            #     )
+            error = np.nan
             textstr = f"error at peak surge {error}%"
             if avg:
                 fit = -sim.mean() + obs[col].mean()
@@ -454,9 +464,9 @@ def create_subsequent_pages(
     else:
         df_i = df.index[start_index:]
     for i, i_s in enumerate(df_i):
-        station = df.iloc[i_s]
+        station = df.iloc[i]
         ts_ax = fig.add_subplot(outgs[int(i / 2), i % 2])
-        plot_time_series(station, os.path.join(obs_root, "surge"), gauges, ts_ax)
+        plot_time_series(station, obs_root, ts_ax)
         plt.tight_layout()
         fig.subplots_adjust(hspace=0.1)
     return fig
@@ -555,10 +565,10 @@ def create_skill_report(wdir, ds_source="stations.nc"):
             ioc_raw, os.path.join(obs_root, "clean"), ext=".csv"
         )
         if len(ioc_clean) > 0:
-            model = extract_from_ds(
-                ioc_clean, obs_root + "/model", gauges, "ioc_code", "elev", ""
-            )
-            skill_regional = compute_surge_comparison(model, obs_root)
+            # model = extract_from_ds(
+            #     ioc_clean, obs_root + "/model", gauges, "ioc_code", "elev", ""
+            # )
+            # skill_regional = compute_surge_comparison(model, obs_root)
 
             skill_file = os.path.join(wdir, f"skill_{tmin}-{tmax}.csv")
             skill_regional = pd.read_csv(skill_file, index_col=0)
@@ -585,7 +595,12 @@ def create_skill_report(wdir, ds_source="stations.nc"):
                     else:
                         xmin, xmax, ymin, ymax = COASTLINES[region]
                     area = shapely.box(xmin, ymin, xmax, ymax)
-                    for param in ["RMSE", "Correlation Coefficient", "R^2"]:
+                    for param in [
+                        "RMSE",
+                        "Correlation Coefficient",
+                        "R^2",
+                        "BIAS or mean error",
+                    ]:
                         fig, map_ax = plt.subplots(
                             figsize=(29.7 * CM, 21 * CM)
                         )  # A4 landscape
@@ -599,5 +614,30 @@ def create_skill_report(wdir, ds_source="stations.nc"):
                         )
                         pdf.savefig(fig, orientation="portrait")
 
-                pdf.savefig(fig, orientation="portrait")
+                # ADD 20 worst / 20 best
+                best_rmse = ioc_detided.loc[
+                    ioc_detided["RMSE"].abs().nsmallest(8).index
+                ]
+                worst_rmse = ioc_detided.loc[
+                    ioc_detided["RMSE"].abs().nlargest(8).index
+                ]
+                best_bias = ioc_detided.loc[
+                    ioc_detided["BIAS or mean error"].abs().nsmallest(8).index
+                ]
+                worst_bias = ioc_detided.loc[
+                    ioc_detided["BIAS or mean error"].abs().nlargest(8).index
+                ]
+                best_r2 = ioc_detided.nlargest(8, "R^2")
+                worst_r2 = ioc_detided.nsmallest(8, "R^2")
+
+                for df in [
+                    best_rmse,
+                    worst_rmse,
+                    best_bias,
+                    worst_bias,
+                    best_r2,
+                    worst_r2,
+                ]:
+                    fig = create_subsequent_pages(df, obs_root, gauges, 0)
+                    pdf.savefig(fig)
                 plt.close(fig)

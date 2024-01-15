@@ -124,6 +124,6 @@ COASTLINES = {  # tuple of lon min, lon max, lat min, lat max
     "Adriatic": (12.0, 19.6, 40.0, 45.8),  # Adriatic Sea coast from Italy to Croatia
     "Europe": (-42.80, 72.80, 15.00, 71.00),
     "East Coast US + Gulf of Mexico": (-105.48, -56.52, 25.00, 47.00),
-    "Oceania": (140, 180, -47.00, -10.00),
+    "Oceania": (120, 180, -47.00, 0.00),
     "West Coast US": (-150.05, -100.95, 32.00, 55.00),
 }
