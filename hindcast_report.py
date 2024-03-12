@@ -1,12 +1,9 @@
 from plots import create_skill_report
+import glob 
 import os
-
+import xarray as xr
 
 WORKDIR = os.path.join(os.path.dirname(os.path.realpath(__file__)))
-hind = [
-    "hindcast/ds2012.nc",
-    "hindcast/ds2013.nc",
-    "hindcast/ds2014.nc",
-    "hindcast/ds2015.nc",
-]
-create_skill_report(WORKDIR, hind)
+ds = xr.open_mfdataset(glob.glob("hindcast/ds*.nc"), combine="by_coords")
+
+create_skill_report(WORKDIR, ds)

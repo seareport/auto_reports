@@ -6,13 +6,21 @@ import numpy as np
 import pandas as pd
 import logging
 import xarray as xr
+import matplotlib.pyplot as plt
 
 # jrc packages
 from pyposeidon.utils.statistics import get_stats
-from analysea.utils import cleanup, detect_time_step
+from analysea.utils import cleanup
+from analysea.utils import detect_time_step
+from analysea.utils import resample
+from analysea.utils import interpolate
 from analysea.tide import detide
 from searvey.multi import multiprocess
-import observer
+from searvey.coops import fetch_coops_station
+from searvey.ioc import fetch_ioc_station
+from searvey import get_coops_stations
+
+# import observer
 
 # global variables
 from common import (
@@ -35,7 +43,7 @@ def ensure_directory(path: str) -> None:
     )  # No need to check if it exists, makedirs can do it
 
 
-def ioc_subset_from_files_in_folder(
+def seaset_subset_from_files_in_folder(
     stations: pd.DataFrame, folder: str, ext: str = ".json"
 ):
     """this function return a subset of the ioc database from all the files (json or parquet)
@@ -56,8 +64,11 @@ def ioc_subset_from_files_in_folder(
             elif ext == ".csv":
                 list_files.append(name)
 
-    boolist = stations.ioc_code.isin(list_files)
-    res = stations[boolist]
+    stations.loc[:,"nos_id_str"] = stations[~pd.isna(stations['nws_id'])]['nos_id'].astype(int).astype(str)
+    boolist1 = stations.ioc_code.isin(list_files) # IOC
+    boolist2 = stations.nos_id_str.isin(list_files)   # CO-OPS
+    res = stations[boolist1 | boolist2] 
+
     if ext == ".json":
         res["sensor"] = sensor_list
         for i_s, station in enumerate(list_files):
@@ -81,31 +92,67 @@ def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def generate_dicts(
-    stations: pd.DataFrame,
+def generate_dicts_fetch(
+    df: pd.DataFrame,
     start: pd.Timestamp,
     end: pd.Timestamp,
     obs_root: str,
-    suffix: str = ".csv",
+    ext: str = ".csv",
 ) -> list[str]:
     dicts = []
-    for ioc_code in stations.ioc_code:
+    
+    for ii in range(len(df)):
+        if not pd.isna(df.iloc[ii]["ioc_code"]):
+            # ioc takes priority over coops
+            provider = 'ioc'
+            station = df.iloc[ii]['ioc_code']
+        elif not pd.isna(df.iloc[ii]["nos_id"]):
+            provider = 'coops'
+            station = df.iloc[ii]['nos_id']
+        else: 
+            # other providers not yet implemented
+            continue
         dicts.append(
             dict(
-                station=ioc_code,
+                provider = provider,
+                station=station,
                 start=start,
                 end=end,
                 obs_folder=obs_root,
-                suffix=suffix,
+                ext=ext,
             )
         )
     return dicts
 
 
-def generate_dicts2(stations: pd.DataFrame, obs_root: str) -> list[str]:
+def generate_dicts_clean(
+    df: pd.DataFrame,
+    obs_root: str,
+    ext: str = ".csv",
+    t_rsp: int = 30,
+) -> list[str]:
     dicts = []
-    for ioc_code in stations.ioc_code:
-        dicts.append(dict(station=ioc_code, obs_root=obs_root))
+    
+    for ii in range(len(df)):
+        if not pd.isna(df.iloc[ii]["ioc_code"]):
+            # ioc takes priority over coops
+            provider = 'ioc'
+            station = df.iloc[ii]['ioc_code']
+        elif not pd.isna(df.iloc[ii]["nos_id"]):
+            provider = 'coops'
+            station = df.iloc[ii]['nos_id'].astype(int).astype(str)
+        else: 
+            # other providers not yet implemented
+            continue
+        dicts.append(
+            dict(
+                provider = provider,
+                station=station,
+                obs_root=obs_root,
+                ext=ext,
+                t_rsp=t_rsp,
+            )
+        )
     return dicts
 
 
@@ -114,7 +161,7 @@ def get_stations(
     start: pd.Timestamp,
     end: pd.Timestamp,
     obs_folder: str,
-    suffix=".csv",
+    ext=".csv",
 ) -> pd.DataFrame:
     os.makedirs(obs_folder, exist_ok=True)
     # scrape using observer
@@ -125,38 +172,57 @@ def get_stations(
     for station in data.keys():
         if not data[station].empty:
             df = data[station]
-            write_df(df, os.path.join(obs_folder, station + suffix))
+            write_df(df, os.path.join(obs_folder, station + ext))
 
 
-def get_one_ioc(
-    station: str, start: pd.Timestamp, end: pd.Timestamp, obs_folder: str, suffix=".csv"
-):
-    # scrape using observer
-    no_years = pd.Timestamp.now().year - start.year + 1
-    df = observer.get_ioc_df(station, no_years=no_years)
-    if len(df) > 0:
-        mask = (df.index >= start) & (df.index <= end)
-        df = df[mask]
-        if len(df) > 0:
-            write_df(df, os.path.join(obs_folder, station + suffix))
+def get_one_provider(provider: str, 
+                     station: str, 
+                     start: pd.Timestamp, 
+                     end: pd.Timestamp, 
+                     obs_folder: str,
+                     ext=".csv"): 
+    if station == 'noct': 
+        pass
+    else:
+        if not os.path.exists(os.path.join(obs_folder, str(station) + ext)):
+            if provider == "ioc":
+                df = fetch_ioc_station(station, start, end)
+            elif provider == "coops":
+                df = fetch_coops_station(station, start, end)
+                start = start.tz_localize('UTC') if start.tzinfo is None else start
+                end = end.tz_localize('UTC') if end.tzinfo is None else end
+            if len(df) > 0:
+                mask = (df.index >= start) & (df.index <= end)
+                df = df[mask]
+                if len(df) > 0:
+                    write_df(df, os.path.join(obs_folder, str(station) + ext))
 
 
-def get_multi_ioc(
-    ioc_df: pd.DataFrame,
+def get_multi_provider(
+    df: pd.DataFrame,
     start: pd.Timestamp,
     end: pd.Timestamp,
     obs_folder: str,
-    suffix=".csv",
+    ext=".csv",
 ):
-    logging.info("cleaning selected stations..")
-    ioc_dict = generate_dicts(ioc_df, start, end, obs_folder, suffix)
-    multiprocess(
-        get_one_ioc,  # with the observer package
-        ioc_dict,
-        n_workers=NCPU,  ##!!CAREFUL!! here adapt the numper of procs to your machine !
-        disable_progress_bar=False,
-    )
-    return ioc_subset_from_files_in_folder(ioc_df, obs_folder, ext=suffix)
+    """
+    This function fetches data from multiple sources (IOC and CO-OPS) for the stations in the input dataframe.
+
+    Args:
+        df (pd.DataFrame): A dataframe containing the stations to fetch data for.
+        start (pd.Timestamp): The start date for the data fetch.
+        end (pd.Timestamp): The end date for the data fetch.
+        obs_folder (str): The folder where the observed data is stored.
+        ext (str, optional): The file extension of the observed data. Defaults to ".csv".
+
+    Returns:
+        pd.DataFrame: A dataframe containing the stations and their data sources.
+    """
+    logging.info("fetching IOC/COOPS stations..")
+    seaset_fetch_dict = generate_dicts_fetch(df, start, end, obs_folder, ext)
+    for inp in seaset_fetch_dict:
+        get_one_provider(**inp)
+    return seaset_subset_from_files_in_folder(df, obs_folder, ext=ext)
 
 
 def write_df(df, fout):
@@ -178,23 +244,39 @@ def read_df(fin):
     return df
 
 
-def clean_one_ioc(station: str, obs_root: str, suffix=".csv") -> None:
+def clean_one_seaset(provider: str, 
+                     station: str, 
+                     obs_root: str, 
+                     ext: str = ".csv", 
+                     t_rsp: int = 30,
+    ) -> None:
     #  read station data
     obs_raw = os.path.join(obs_root, "raw")
     obs_clean = os.path.join(obs_root, "clean")
-    fileClean = f"{obs_clean}/{station}{suffix}"
-    ts = read_df(os.path.join(obs_raw, station + suffix))
+    fileClean = f"{obs_clean}/{station}{ext}"
+    fileRaw = f"{obs_raw}/{station}{ext}"
+    ts = read_df(fileRaw)
+    if provider == "coops":
+        ts = ts.drop(columns=["quality", "flags"])
     df = cleanup(ts, kurtosis=KURTOSIS_THRESHOLD)
+    df = resample(df, t_rsp=t_rsp)
+    df = interpolate(df, t_rsp=t_rsp)
     if len(df) > 0:
         write_df(df, fileClean)
 
 
-def clean_and_select_ioc(stations: pd.DataFrame, obs_root: str) -> None:
+def clean_and_select_seaset(stations: pd.DataFrame, 
+                            obs_root: str, 
+                            ext: str = '.csv', 
+                            t_rsp: int = 30,
+    ) -> None:
     logging.info("cleaning selected stations..")
-    ioc_to_clean = generate_dicts2(stations, obs_root)
+    seaset_clean_dict = generate_dicts_clean(stations, obs_root, ext, t_rsp)
+    # for inp in seaset_clean_dict:
+    #     clean_one_seaset(**inp)
     multiprocess(
-        clean_one_ioc,  # with the observer package
-        ioc_to_clean,
+        clean_one_seaset,  # with the observer package
+        seaset_clean_dict,
         n_workers=NCPU,  ##!!CAREFUL!! here adapt the numper of procs to your machine !
         disable_progress_bar=False,
     )
@@ -211,15 +293,13 @@ def get_model_data(
     ds: xr.Dataset,
     station: str,
     id_column: str = "id",
-    elev_column: str = "elev_sim",
-    prefix: str = "IOC-",
 ) -> pd.DataFrame:
-    ix = np.where(ds[id_column].values == prefix + station)[0]
+    ix = np.where(ds[id_column].values == station)[0]
     if len(ix) == 1:
         tg = ds[{id_column: ix}]
         tg_df = tg.to_dataframe()
         sim = tg_df.reset_index(level=id_column).drop(columns=id_column)
-        return sim[elev_column]
+        return sim
     else:
         return pd.DataFrame()
 
@@ -247,30 +327,29 @@ def compute_stats(obs: pd.DataFrame, sim: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def compare_one_ioc(
+def compare_one_seaset(
     station: str,
     lat: float,
     obs_root: str,
     opts: dict,
     t_rsp: int = 30,
-    interp: bool = False,
-) -> pd.DataFrame():
-    obs_data = read_df(os.path.join(obs_root, "clean", station + ".csv"))
-    sim = read_df(os.path.join(obs_root, "model", station + ".csv"))
+    ext: str = ".csv",
+) -> pd.DataFrame:
+    obs_data = read_df(os.path.join(obs_root, "clean", f"{station}.parquet"))
+    sim = read_df(os.path.join(obs_root, "model", f"{station}.parquet"))
     sim = sim.iloc[:, 0]  # take only the first column, whatever its name
     local_opts = opts.copy()
     local_opts["lat"] = lat
     for sensor in obs_data.columns:
         ss = obs_data[sensor]
         # resample
-        h_rsmp = ss.resample(f"{t_rsp}min").mean().shift(freq=f"{int(t_rsp/2)}min")
+        h_rsmp = resample(ss, t_rsp=t_rsp)
+        h_rsmp = interpolate(h_rsmp, t_rsp=t_rsp) 
         # detide
         obs = detide(h_rsmp, **local_opts)
-        if interp:
-            obs = obs.interpolate()
         stats = compute_stats(obs, sim)
         if len(obs) > 0:
-            write_df(obs.to_frame(), os.path.join(obs_root, "surge", station + ".csv"))
+            write_df(obs.to_frame(), os.path.join(obs_root, "surge", f"{station}.parquet"))
         # add sensor info
         stats["sensor"] = sensor
         return pd.DataFrame(
@@ -279,12 +358,12 @@ def compare_one_ioc(
 
 
 def generate_ioc_comparison_inputs(
-    stations: pd.DataFrame, obs_folder: str, opts: dict
+    stations: pd.DataFrame, obs_folder: str, opts: dict, ext: str = ".csv"
 ) -> List[dict]:
     inputs = []
     for i_s, station in enumerate(stations.ioc_code):
         lat = stations.iloc[i_s].latitude
-        inputs.append(dict(station=station, lat=lat, obs_root=obs_folder, opts=opts))
+        inputs.append(dict(station=station, lat=lat, obs_root=obs_folder, opts=opts, ext=ext))
     return inputs
 
 
@@ -293,21 +372,27 @@ def extract_from_ds(
     work_folder: str,
     ds_model: xr.Dataset,
     id_column: str,
-    elev_column: str,
-    prefix: str,
+    ext: str = ".csv",
     t_rsp: int = 30,
 ) -> pd.DataFrame:
     #
     os.makedirs(work_folder, exist_ok=True)
-    # #
+    #
+    # stations.loc[:,"nos_id_str"] = stations[~pd.isna(stations['nws_id'])]['nos_id'].astype(int).astype(str)
     # for id in stations[id_column]:
-    #     sim = get_model_data(ds_model, id, id_column, elev_column, prefix)
+    #     ioc_id = stations[stations.seaset_id == id].ioc_code.values[0]
+    #     coops_id = stations[stations.seaset_id == id].nos_id_str.values[0]
+    #     if not pd.isna(ioc_id): 
+    #         name = ioc_id
+    #     elif not pd.isna(coops_id): 
+    #         name = coops_id
+    #     sim = get_model_data(ds_model, id, id_column)
     #     if len(sim) > 0:
-    #         sim.resample(f"{t_rsp}min").mean().shift(freq=f"{int(t_rsp/2)}min").to_csv(
-    #             os.path.join(work_folder, id + ".csv")
-    #         )
+    #         sim = resample(sim, t_rsp = t_rsp)
+    #         sim = interpolate(sim, t_rsp = t_rsp)
+    #         write_df(sim, os.path.join(work_folder, name + ext))
 
-    extracted = ioc_subset_from_files_in_folder(stations, work_folder, ext=".csv")
+    extracted = seaset_subset_from_files_in_folder(stations, work_folder, ext=ext)
     return extracted
 
 
@@ -315,12 +400,13 @@ def compute_surge_comparison(
     stations: pd.DataFrame,
     obs_folder: str,
     opts: dict = OPTS,
+    ext: str = ".csv",
 ):
     logging.info("Computing model vs obs surge comparison..")
-    inputs = generate_ioc_comparison_inputs(stations, obs_folder, opts)
+    inputs = generate_ioc_comparison_inputs(stations, obs_folder, opts, ext)
     # the line equation:
     results = multiprocess(
-        compare_one_ioc,
+        compare_one_seaset,
         inputs,
         n_workers=NCPU,  ##!!CAREFUL!! here adapt the numper of procs to your machine !
         disable_progress_bar=False,
@@ -345,7 +431,7 @@ def compute_surge_comparison_serial(
     # the line equation:
     res = pd.DataFrame()
     for i_, inp in enumerate(inputs):
-        result = compare_one_ioc(**inp)
+        result = compare_one_seaset(**inp)
         res = pd.concat([res, result])
     return res
 

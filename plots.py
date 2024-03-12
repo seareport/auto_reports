@@ -20,14 +20,14 @@ import thalassa
 from data_process import (
     ensure_directory,
     get_model_data,
-    clean_and_select_ioc,
+    clean_and_select_seaset,
     get_stations,
-    get_multi_ioc,
+    get_multi_provider,
     compute_surge_comparison,
     read_df,
     compute_surge_comparison_serial,
     extract_from_ds,
-    ioc_subset_from_files_in_folder,
+    seaset_subset_from_files_in_folder,
     get_storm_peak_time,
     avg_ts,
 )
@@ -537,14 +537,9 @@ def create_storm_surge_report(start, end, regions, storm_name, wdir):
             logging.error(f"Error in processing region {region}: {e}")
 
 
-def create_skill_report(wdir, ds_source="stations.nc"):
-    if isinstance(ds_source, str):
-        gauges = xr.open_dataset(os.path.join(wdir, "stations.nc"))
-    elif isinstance(ds_source, list):
-        gauges = xr.open_mfdataset(ds_source)
-        #
-    start = pd.Timestamp(gauges.time.min().values)
-    end = pd.Timestamp(gauges.time.max().values)
+def create_skill_report(wdir: str, ds: xr.Dataset):
+    start = pd.Timestamp(ds.time.min().values)
+    end = pd.Timestamp(ds.time.max().values)
     tmin = start.strftime("%Y-%m-%d")
     tmax = end.strftime("%Y-%m-%d")
 
@@ -556,21 +551,27 @@ def create_skill_report(wdir, ds_source="stations.nc"):
 
     report_path = os.path.join(wdir, "reports", f"skill_report_{tmin}_{tmax}.pdf")
     with mpdf.PdfPages(report_path) as pdf:
-        ioc_raw = SEASET_CATALOG[~SEASET_CATALOG.ioc_code.isna()]
         # 0 download the stations
-        # ioc_avail = get_multi_ioc(ioc_raw, start, end, obs_root + "/raw", suffix='.parquet')
+        seaset_avail = get_multi_provider(SEASET_CATALOG, start, end, obs_root + "/raw", ext='.parquet')
         # # 1 clean the stations
-        # clean_and_select_ioc(ioc_avail, obs_root)
-        ioc_clean = ioc_subset_from_files_in_folder(
-            ioc_raw, os.path.join(obs_root, "clean"), ext=".csv"
+        # clean_and_select_seaset(seaset_avail, obs_root, ext = '.parquet', t_rsp=60)
+        seaset_clean = seaset_subset_from_files_in_folder(
+            seaset_avail, 
+            os.path.join(obs_root, "clean"), 
+            ext=".parquet"
         )
-        if len(ioc_clean) > 0:
-            # model = extract_from_ds(
-            #     ioc_clean, obs_root + "/model", gauges, "ioc_code", "elev", ""
+        if len(seaset_clean) > 0:
+            # seaset_model = extract_from_ds(seaset_clean, 
+            #                         obs_root + "/model", 
+            #                         ds, 
+            #                         "seaset_id", 
+            #                         ext = '.parquet', 
+            #                         t_rsp = 60,
             # )
-            # skill_regional = compute_surge_comparison(model, obs_root)
+            # skill_regional = compute_surge_comparison(seaset_model, obs_root, ext = 'parquet')
 
             skill_file = os.path.join(wdir, f"skill_{tmin}-{tmax}.csv")
+            # skill_regional.to_csv(skill_file)
             skill_regional = pd.read_csv(skill_file, index_col=0)
             if not skill_regional.empty:
                 ioc_detided = skill_regional.merge(
@@ -638,6 +639,6 @@ def create_skill_report(wdir, ds_source="stations.nc"):
                     best_r2,
                     worst_r2,
                 ]:
-                    fig = create_subsequent_pages(df, obs_root, gauges, 0)
+                    fig = create_subsequent_pages(df, obs_root, ds, 0)
                     pdf.savefig(fig)
                 plt.close(fig)
