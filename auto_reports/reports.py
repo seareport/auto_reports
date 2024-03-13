@@ -449,11 +449,13 @@ def create_subsequent_pages(
     return fig
 
 
-def create_storm_surge_report(start, end, regions, storm_name, wdir):
+def create_storm_surge_report(start, end, regions, storm_name, wdir=None):
+    if wdir is None:
+        wdir = os.path.join(os.getcwd())
     tmin = start.strftime("%Y-%m-%d")
     tmax = end.strftime("%Y-%m-%d")
     obs_root = os.path.join(wdir, f"obs/{tmin}_{tmax}")
-    dirs = ["raw", "clean", "surge"]
+    dirs = ["raw", "clean", "surge", "model"]
 
     for d in dirs:
         ensure_directory(os.path.join(obs_root, d))

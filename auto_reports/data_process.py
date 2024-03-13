@@ -306,13 +306,15 @@ def compute_stats(obs: pd.DataFrame, sim: pd.DataFrame) -> pd.DataFrame:
 def compare_one_seaset(
     station: str,
     lat: float,
-    obs_root: str,
+    obs_folder: str,
+    model_folder: str,
+    surge_folder: str,
     opts: dict,
     t_rsp: int = 30,
     ext: str = ".csv",
 ) -> pd.DataFrame:
-    obs_data = read_df(os.path.join(obs_root, "clean", f"{station}.parquet"))
-    sim = read_df(os.path.join(obs_root, "model", f"{station}.parquet"))
+    obs_data = read_df(os.path.join(obs_folder, f"{station}{ext}"))
+    sim = read_df(os.path.join(model_folder, f"{station}{ext}"))
     sim = sim.iloc[:, 0]  # take only the first column, whatever its name
     local_opts = opts.copy()
     local_opts["lat"] = lat
@@ -325,9 +327,7 @@ def compare_one_seaset(
         obs = detide(h_rsmp, **local_opts)
         stats = compute_stats(obs, sim)
         if len(obs) > 0:
-            write_df(
-                obs.to_frame(), os.path.join(obs_root, "surge", f"{station}.parquet")
-            )
+            write_df(obs.to_frame(), os.path.join(surge_folder, f"{station}{ext}"))
         # add sensor info
         stats["sensor"] = sensor
         return pd.DataFrame(
@@ -336,13 +336,26 @@ def compare_one_seaset(
 
 
 def generate_ioc_comparison_inputs(
-    stations: pd.DataFrame, obs_folder: str, opts: dict, ext: str = ".csv"
+    stations: pd.DataFrame,
+    obs_folder: str,
+    model_folder: str,
+    surge_folder: str,
+    opts: dict,
+    ext: str = ".csv",
 ) -> List[dict]:
     inputs = []
     for i_s, station in enumerate(stations.ioc_code):
         lat = stations.iloc[i_s].latitude
         inputs.append(
-            dict(station=station, lat=lat, obs_root=obs_folder, opts=opts, ext=ext)
+            dict(
+                station=station,
+                lat=lat,
+                obs_folder=obs_folder,
+                model_folder=model_folder,
+                surge_folder=surge_folder,
+                opts=opts,
+                ext=ext,
+            )
         )
     return inputs
 
@@ -381,11 +394,15 @@ def extract_from_ds(
 def compute_surge_comparison(
     stations: pd.DataFrame,
     obs_folder: str,
+    model_folder: str,
+    surge_folder: str,
     opts: dict = OPTS,
     ext: str = ".csv",
 ):
     logging.info("Computing model vs obs surge comparison..")
-    inputs = generate_ioc_comparison_inputs(stations, obs_folder, opts, ext)
+    inputs = generate_ioc_comparison_inputs(
+        stations, obs_folder, model_folder, surge_folder, opts, ext
+    )
     # the line equation:
     results = multiprocess(
         compare_one_seaset,
@@ -402,13 +419,14 @@ def compute_surge_comparison(
 def compute_surge_comparison_serial(
     stations: pd.DataFrame,
     obs_folder: str,
+    model_folder: str,
+    surge_folder: str,
     opts: dict = OPTS,
+    ext: str = ".csv",
 ):
     logging.info("Computing model vs obs surge comparison.. (sequential execution)")
     inputs = generate_ioc_comparison_inputs(
-        stations,
-        obs_folder,
-        opts,
+        stations, obs_folder, model_folder, surge_folder, opts, ext
     )
     # the line equation:
     res = pd.DataFrame()
