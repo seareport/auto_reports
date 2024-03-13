@@ -10,6 +10,12 @@ python = ">=3.10,<3.12"
 searvey = { git = "https://github.com/oceanmodeling/searvey.git", branch = "dev" }
 analysea = { git = "https://github.com/seareport/analysea.git",  branch = "tide-chunk" }
 pyposeidon = { git = "https://github.com/ec-jrc/pyPoseidon.git" }
+matplotlib = "*"
+
+[tool.poetry.group.dev.dependencies]
+ipympl = "*"
+mypy = "*"
+pytest = "*"
 
 [build-system]
 requires = ["poetry-core"]
