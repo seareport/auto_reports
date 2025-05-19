@@ -37,7 +37,6 @@ scatter = {
     "height": 450,
 }
 
-scatter_offset = {'margin': '130px 0 0 0px'}
 
 scale = 2
 spilhaus_bathy = {
