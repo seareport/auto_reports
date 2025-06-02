@@ -17,7 +17,7 @@ def make_brightness_gradient(base_color, steps=256):
     r, g, b = to_rgb(base_color)
     h, l, s = colorsys.rgb_to_hls(r, g, b)
     colors = []
-    for lightness in np.linspace(0.2, 0.9, steps):  # darker to lighter
+    for lightness in np.linspace(0.4, 0.95, steps):  # darker to lighter
         r2, g2, b2 = colorsys.hls_to_rgb(h, 1 - lightness, s)
         colors.append((r2, g2, b2))
     return LinearSegmentedColormap.from_list(f"gradient_{base_color}", colors)

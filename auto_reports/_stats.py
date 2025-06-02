@@ -28,7 +28,7 @@ def run_stats(model):
             info = get_parquet_attrs(OBS_DIR / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
             normal_stats = seastats.get_stats(sim, obs, seastats.GENERAL_METRICS_ALL)
-            storm_stats = seastats.get_stats(sim_, obs_, seastats.STORM_METRICS, quantile=0.9)
+            storm_stats = seastats.get_stats(sim_, obs_, seastats.STORM_METRICS, quantile=0.995)
             stats[station] = {**normal_stats, **storm_stats}
             stats[station]["lon"] = float(info["lon"])
             stats[station]["lat"] = float(info["lat"])
@@ -47,7 +47,7 @@ def run_stats_ext(model):
             sim = load_data(f"{model}/{station}.parquet")
             info = get_parquet_attrs(OBS_DIR / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
-            ext_ = seastats.storms.match_extremes(sim_, obs_, quantile = 0.95)
+            ext_ = seastats.storms.match_extremes(sim_, obs_, quantile = 0.995)
             ext_['lon'] = float(info["lon"])
             ext_['lat'] = float(info["lat"])
             ext_['station'] = station

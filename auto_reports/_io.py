@@ -95,7 +95,7 @@ def load_data(path: Path) -> pd.Series:
 
 @pn.cache
 def load_world_oceans(): 
-    df = gp.read_file("https://gist.githubusercontent.com/tomsail/2fa52d9667312b586e7d3baee123b57b/raw/23929561eaa8aa76376580a7df300c4e3eb2e509/world_maritime_sectors.json")
+    df = gp.read_file("https://gist.githubusercontent.com/tomsail/2fa52d9667312b586e7d3baee123b57b/raw/f121bd446e7c276e7230fb9896e4d487d63a8cb1/world_maritime_sectors.json")
     return df
 
 
