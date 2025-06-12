@@ -23,20 +23,19 @@ radar = {
 }
 
 table = {
-    "width": 600,
-    "height": 450,
+    "width": 400,
+    "height": 550,
 }
 
 cross_selector = {
-    "width": 300,
-    "height": 450
+    "width": 250,
+    "height": 550
 }
 
 scatter = {
-    "width": 450,
-    "height": 450,
+    "width": 500,
+    "height": 600,
 }
-
 
 scale = 2
 spilhaus_bathy = {

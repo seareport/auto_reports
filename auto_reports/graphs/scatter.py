@@ -12,71 +12,109 @@ KDIMS = ["tdiff", "diff"]
 KDIMS2 = ["observed", "model"]
 WINDOW = 12 # hours
 lag_range = (-WINDOW, WINDOW)
+BASE_OPTIONS = dict(
+    shared_axes=True,
+    tools=["box_select", "tap", "hover"],
+    size=10,
+    legend_position= "bottom",
+    legend_cols=6,
+    muted=True
+)
 
-def make_brightness_gradient(base_color, steps=256):
+def make_brightness_gradient_hex(base_color, steps=10, lightness_range=(0.3, 0.85)):
     r, g, b = to_rgb(base_color)
     h, l, s = colorsys.rgb_to_hls(r, g, b)
-    colors = []
-    for lightness in np.linspace(0.4, 0.95, steps):  # darker to lighter
-        r2, g2, b2 = colorsys.hls_to_rgb(h, 1 - lightness, s)
-        colors.append((r2, g2, b2))
-    return LinearSegmentedColormap.from_list(f"gradient_{base_color}", colors)
-
-def return_gauss(df, KDIMS):
-    x0 = df[KDIMS[0]].values
-    y0 = df[KDIMS[1]].values
-    xy = np.vstack([x0,y0])
-    z = gaussian_kde(xy)(xy)
-    df["density"] = z
-    return df
+    colors_hex = []
+    lightness_values = np.linspace(*lightness_range, steps)
+    
+    for lightness in lightness_values:
+        r2, g2, b2 = colorsys.hls_to_rgb(h, lightness, s)
+        hex_color = '#{0:02x}{1:02x}{2:02x}'.format(int(r2 * 255), int(g2 * 255), int(b2 * 255))
+        colors_hex.append(hex_color)
+    
+    return colors_hex
 
 def scatter_table(df, color):
     if df.empty: 
         return pn.pane.Markdown("## No extreme to show")
     else:
+        
         unique_stations = sorted(df['station'].unique().tolist())
-        cross_selector = pn.widgets.CrossSelector(
+        unique_storms = sorted(df['storm'].unique().tolist())
+
+        station_selector = pn.widgets.CrossSelector(
             name='Stations',
             value=[],
             options=unique_stations,
-            **rr.cross_selector)
-        
-        @pn.depends(cross_selector.param.value)
-        def create_plots(selected_stations):
-            filtered_df = df if not selected_stations else df[df['station'].isin(selected_stations)]
+            **rr.cross_selector
+        )
+
+        storm_selector = pn.widgets.CrossSelector(
+            name='Storms',
+            value=[],
+            options=unique_storms,
+            **rr.cross_selector
+        )
+
+        selector_panel = pn.Row(
+            pn.Column(
+                pn.pane.Markdown(f"### Select from {len(unique_stations)} stations"),
+                station_selector
+            ),
+            pn.Column(
+                pn.pane.Markdown(f"### Select from {len(unique_storms)} storms"),
+                storm_selector
+            )
+        )
+
+        toggle_btn = pn.widgets.Button(name='Hide', button_type='primary')
+
+        def toggle_visibility(event):
+            selector_panel.visible = not selector_panel.visible
+            toggle_btn.name = 'Show' if not selector_panel.visible else 'Hide'
+
+        toggle_btn.on_click(toggle_visibility)
+
+        @pn.depends(station_selector.param.value, storm_selector.param.value)
+        def create_plots(selected_stations, selected_storms):
+            filtered_df = df.copy()
+
+            if selected_stations:
+                filtered_df = filtered_df[filtered_df['station'].isin(selected_stations)]
+            if selected_storms:
+                filtered_df = filtered_df[filtered_df['storm'].isin(selected_storms)]
+
             if filtered_df.empty:
                 return pn.pane.Markdown("## No data for the selected stations")
             
             y_range = (filtered_df["diff"].min()-0.1, filtered_df["diff"].max()+0.1)
-            cmap = make_brightness_gradient(color)
-            options = dict(
-                    tools=["box_select", "tap"],
-                    alpha=0.7,
-                    size=3,
-                    ylim=y_range,
-                    xlabel="time lag [hours]",
-                    ylabel = "model - observed [m]",
-                    shared_axes=True, 
-                    title = "model vs. observed error",
-                    cmap = cmap
-                )
-            filtered_df = return_gauss(filtered_df, KDIMS)
-            scat_ = filtered_df.sort_values("density", ascending=False).hvplot.scatter(
-                x=KDIMS[0],
-                y=KDIMS[1],
-                c="density").opts(**options)
-            
-            filtered_df["time observed"] = filtered_df.index
-            columns = ["station", "name", "lon", "lat", "observed", "model", "diff", "time observed"]
-            table = hv.Table(filtered_df[columns]).opts(**rr.table)
+            options = {
+                    "ylim":(min(0, y_range[0]), y_range[1]),
+                    "xlabel":"time lag [hours]",
+                    "ylabel": "model - observed [m]",
+                    "title": "model vs. observed error",
+                    **BASE_OPTIONS
+                }
+            colors = make_brightness_gradient_hex(color, len(filtered_df.storm.unique()))
+            overlays = {
+                storm: filtered_df[filtered_df.storm==storm].hvplot.scatter(
+                    x=KDIMS[0],
+                    y=KDIMS[1],
+                    c = colors[istorm],
+                    label=str(storm),  # Important for the legend
+                ).opts(**options)
+                for istorm, storm in enumerate(filtered_df.storm.unique())
+            }
+            scat_ = hv.NdOverlay(overlays, kdims='storm')
+            columns = ["station", "name", "storm", "observed", "model", "diff", "tdiff"]
+            table = hv.Table(filtered_df[columns].round(2)).opts(**rr.table)
             selection = Selection1D(source=table)
             def highlight_points(index):
                 if not index or len(index) == 0:
                     return hv.Scatter([]).opts(**options)
                 selected_df = filtered_df.iloc[index]
-                options["size"] = 8
+                options["size"] = 20
                 options["line_color"] = "k"
-                options["alpha"] = 0.9
                 options["color"] = color
                 return selected_df.hvplot.scatter(
                     x = KDIMS[0], 
@@ -89,45 +127,43 @@ def scatter_table(df, color):
                 **rr.scatter_compo(y_range))
                 )
 
-            x_range = (filtered_df["observed"].min()-0.1, filtered_df["observed"].max()+0.1)
-            y_range = (filtered_df["model"].min()-0.1, filtered_df["model"].max()+0.1)
-
-            filtered_df = return_gauss(filtered_df, KDIMS2)
+            data_min = min(filtered_df["observed"].min(), filtered_df["model"].min()) - 0.1
+            data_max = max(filtered_df["observed"].max(), filtered_df["model"].max()) + 0.1
+            x_range = y_range = (min(0, data_min), data_max)
 
             x = filtered_df[KDIMS2[1]]
             y = filtered_df[KDIMS2[0]]
             slope, intercept = seastats.get_slope_intercept(x,y)
-            pc1, pc2 = seastats.get_percentiles(x, y, True)
             xx = np.arange(-10, 10)
             yy = xx * slope + intercept
             line = hv.Curve((xx, yy)).opts(line_dash="dashed", color="grey")
-            pc_ = hv.Scatter((pc2, pc1)).opts(color="k", alpha = 0.4, size = 6)
 
-            options2 = dict(
-                    tools = ["box_select", "tap"],
-                    alpha=0.7,
-                    size=3,
-                    xlabel = "observed",
-                    ylabel = "model",
-                    xlim = x_range,
-                    ylim = y_range,
-                    shared_axes = True,
-                    title = f"model vs. observed peaks.\nSlope: {slope:.3f}, Offset: {intercept:.2f}",
-                    cmap=cmap
-                )
+            options2 = {
+                "xlabel": "observed",
+                "ylabel": "model",
+                "xlim": (min(0, x_range[0]), x_range[1]),
+                "ylim":(min(0, y_range[0]), y_range[1]),
+                "title": f"model vs. observed peaks.\nSlope: {slope:.3f}, Offset: {intercept:.2f}",
+                **BASE_OPTIONS
+            }
 
-            scat2_ = filtered_df.sort_values("density", ascending=False).hvplot.scatter(
-                x=KDIMS2[0], 
-                y=KDIMS2[1],
-                c="density").opts(**options2)
-            scat2_ *= line * pc_
+            overlays = {
+                storm: filtered_df[filtered_df.storm==storm].hvplot.scatter(
+                    x=KDIMS2[0],
+                    y=KDIMS2[1],
+                    c = colors[istorm],
+                    label=str(storm),  # Important for the legend
+                ).opts(**options2)
+                for istorm, storm in enumerate(filtered_df.storm.unique())
+            }
+            scat2_ = hv.NdOverlay(overlays, kdims='storm')
+            scat2_ *= line
             def highlight_points2(index):
                 if not index or len(index) == 0:
                     return hv.Scatter([]).opts(**options2)
                 selected_df = filtered_df.iloc[index]
-                options2["size"] = 8
+                options2["size"] = 20
                 options2["line_color"] = "k"
-                options2["alpha"] = 0.9
                 options2["color"] = color
                 return selected_df.hvplot.scatter(
                     x = KDIMS2[0], 
@@ -139,7 +175,7 @@ def scatter_table(df, color):
             composition2 = (scat2_ * highlighted_scatter * xy_axis).opts(**rr.scatter)
 
             return pn.Row(
-                pn.pane.HoloViews(table),
+                pn.pane.HoloViews(table.opts(**rr.table)),
                 pn.pane.HoloViews(composition),
                 pn.pane.HoloViews(composition2)
                 )
@@ -148,8 +184,8 @@ def scatter_table(df, color):
         # Layout with the selector and plots
         return pn.Row(
             pn.Column(
-                pn.pane.Markdown(f"### Filter Data {len(unique_stations)} total stations"),
-                cross_selector
+                toggle_btn,
+                selector_panel
             ),
             create_plots
         )

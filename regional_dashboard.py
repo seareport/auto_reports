@@ -62,7 +62,8 @@ class RegionalDashboard(param.Parameterized):
         self.stats_full = stats_full
         self.stats_extreme = stats_extreme
         self.model = model
-        self.regions = ["Info", "Mesh", "World"] + sorted(list(stats_full.ocean.unique()))
+        # self.regions = ["Info", "Mesh", "World"] + sorted(list(stats_full.ocean.unique()))
+        self.regions = ["Info", "World"] + sorted(list(stats_full.ocean.unique()))
         self.region_select_options = ["World"] + sorted(list(stats_full.ocean.unique()))
         self.cmap = update_color_map(load_world_oceans(), colouring)
         self.dashboard = pn.template.MaterialTemplate()
@@ -106,11 +107,12 @@ class RegionalDashboard(param.Parameterized):
     def create_region_view(self, region):
         if region == "World": 
             stats = self.stats_full.copy()
-            stats_ext = self.stats_extreme.copy()
-            scat_pn = scatter_table(stats_ext, "#89CFF0")
+            scat_pn = scatter_table(pd.DataFrame(), "#89CFF0")
         else: 
             stats = self.stats_full[self.stats_full.ocean == region].copy()
             stats_ext = self.stats_extreme[self.stats_extreme.ocean == region].copy()
+            stats_ext = assign_storms(stats_ext, region)
+            stats_ext = stats_ext.sort_values(by=["time observed"], ascending=[False])
             scat_pn = scatter_table(stats_ext, self.cmap[region])
 
         taylor_pn = taylor_panel(stats, self.cmap, colouring)
@@ -184,7 +186,7 @@ class RegionalDashboard(param.Parameterized):
     def create_dashboard(self):
         # Info tab first
         self.tabs.append(("Info", self.create_info_tab()))
-        self.tabs.append(("Mesh", self.create_mesh_tab()))
+        # self.tabs.append(("Mesh", self.create_mesh_tab()))
         self.tabs.append(("World", self.create_region_view("World")))
 
         export_button = pn.widgets.Button(name="Export All Tabs to PDF", button_type="primary")

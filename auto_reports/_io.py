@@ -20,6 +20,9 @@ import holoviews as hv
 import seareport_data as D
 from playwright.async_api import async_playwright
 
+from auto_reports._storms import STORMS
+from auto_reports._storms import THRESHOLDS
+
 
 def _readline(fd: bytes) -> bytes:
     return fd.readline().split(b"=")[0].split(b"!")[0].strip()
@@ -126,6 +129,21 @@ def assign_oceans(df):
         result_type="expand",
     )
     return df
+
+def find_storm(timestamp: pd.Timestamp, storms: dict):
+    for name, dates in storms.items():
+        for date in dates:
+            storm_date = pd.Timestamp(date)
+            if abs(timestamp - storm_date) <= pd.Timedelta(hours=48):
+                return name
+    return None
+
+
+def assign_storms(ext: pd.DataFrame, region:str):
+    ext = ext.sort_values(ascending=False, by="observed").reset_index()
+    ext = ext[ext["observed"]>THRESHOLDS[region]]
+    ext['storm'] = ext['time observed'].apply(lambda x: find_storm(x,STORMS[region]))
+    return ext.dropna(subset="storm")
 
 
 def update_color_map(df, filter_var):
