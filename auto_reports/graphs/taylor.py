@@ -79,7 +79,7 @@ def create_rms_contours(
             * hv.Text(
                 standard_ref + rms * np.cos(2 * np.pi / 3),
                 rms * np.sin(2 * np.pi / 3),
-                f"{rms*100:.0f}%",
+                f"{rms * 100:.0f}%",
                 halign="left",
                 valign="bottom",
             ).opts(text_font_size="10pt", text_color="green"),
