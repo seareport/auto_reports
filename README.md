@@ -4,7 +4,56 @@
 
 This package purpose is to generate **static** HTML pages used for the dissemination of model skill assessment reports of global surge models.
 
-## Directory Structure
+## Features
+
+- **Multi-tab Dashboard**: Visual exploration by ocean region including info, mesh, and metric views.
+- **Key Metrics**:
+  - Root Mean Square Error (RMSE)
+  - Correlation Coefficient (CR)
+  - Bias
+  - Kling Gupta Efficiency (KGE)
+  - Lambda Index
+  - Peak Error metrics (R1, R3)
+  - More can be added easily
+- **Visual Components**:
+  - Histograms
+  - Taylor diagrams
+  - Scatter plots
+  - Spider charts
+  - Bathymetric and region maps
+- **Export Capabilities**:
+  - Export all tabs to a single PDF file.
+  - Save interactive dashboard as standalone HTML.
+
+## Getting Started
+
+### 1. Install dependencies
+We use [Poetry](https://python-poetry.org/) for dependency management.
+
+```bash
+poetry install
+```
+
+### 2. Launch the Dashboard
+```bash
+python -mpanel serve app.py
+```
+
+ * TS data is fetched  automatically in `data/models/` and `data/obs/` and processed (if not already done) using the package.
+ * Once processed, stats files  are saved in `data/stats/*.parquet`
+ * Dashboard will fetch meshes in `data/meshes/*.gr3` and generate graphics in `data/images/*.png`
+ * Regional report will be ready in the browser shortly after
+
+### Reproduce
+
+ * Create the `data` folder and subfolders. By default, the application uses data from the `data/` folder. To test with a different folder (e.g., `data_demo/`), set the `DATA_DIR` environment variable:
+
+```bash
+export DATA_DIR=data_demo
+```
+follow the directory structure below: 
+
+### Directory Structure
 
 ```bash
 .
@@ -51,56 +100,3 @@ This package purpose is to generate **static** HTML pages used for the dissemina
 └── README.md # You're here!
 ```
 
-## Features
-
-- **Multi-tab Dashboard**: Visual exploration by ocean region including info, mesh, and metric views.
-- **Key Metrics**:
-  - Root Mean Square Error (RMSE)
-  - Correlation Coefficient (CR)
-  - Bias
-  - Kling Gupta Efficiency (KGE)
-  - Lambda Index
-  - Peak Error metrics (R1, R3)
-  - More can be added easily
-- **Visual Components**:
-  - Histograms
-  - Taylor diagrams
-  - Scatter plots
-  - Spider charts
-  - Bathymetric and region maps
-- **Export Capabilities**:
-  - Export all tabs to a single PDF file.
-  - Save interactive dashboard as standalone HTML.
-
-## Getting Started
-
-### 1. Install dependencies
-We use [Poetry](https://python-poetry.org/) for dependency management.
-
-```bash
-poetry install
-```
-
-### 2. Launch the Dashboard
-```bash
-python -mpanel serve app.py
-```
-
- * TS data is fetched  automatically in `data/models/` and `data/obs/` and processed (if not already done) using the package.
- * Once processed, stats files  are saved in `data/stats/*.parquet`
- * Dashboard will fetch meshes in `data/meshes/*.gr3` and generate graphics in `data/images/*.png`
- * Regional report will be ready in the browser shortly after
-
-### Reproduce
-
- * Create the `data` folder and subfolders
- * Model and in-situ sample can be found at:
-https://github.com/oceanmodeling/sealens/tree/master/data
- * Some (lower resolution) meshes can also be found at: https://github.com/seareport/seareport_models
-
-#### Note:
-By default, the application uses data from the `data/` folder. To test with a different folder (e.g., `data_demo/`), set the `DATA_DIR` environment variable:
-
-```bash
-export DATA_DIR=data_demo
-```
