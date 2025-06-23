@@ -51,7 +51,7 @@ python -mpanel serve app.py
 ```bash
 export DATA_DIR=data_demo
 ```
-follow the directory structure below: 
+follow the directory structure below:
 
 ### Directory Structure
 
@@ -99,4 +99,3 @@ follow the directory structure below:
 ├── pyproject.toml, poetry.lock # Project dependencies
 └── README.md # You're here!
 ```
-
