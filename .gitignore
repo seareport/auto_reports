@@ -1,0 +1,6 @@
+.venv
+*.pdf
+*.html
+*.slf
+*.gpkg
+__pycache*
