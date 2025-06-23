@@ -39,11 +39,11 @@ This package purpose is to generate **static** HTML pages used for the dissemina
 │ │   ├── benc.parquet
 │ │   ├── ...
 │ │   └── naha.parquet
-│ └── stats/          # Folder containing "{model}.parquet", "{model}_eva.parquet" stats computed in auto_report/_stats.py routine 
+│ └── stats/          # Folder containing "{model}.parquet", "{model}_eva.parquet" stats computed in auto_report/_stats.py routine
 │     ├── seareport-v3.2_eva.parquet
 │     ├── seareport-v3.2.parquet
 │     ├── stofs2d_eva.parquet
-│     └── stofs2d.parquet│ 
+│     └── stofs2d.parquet│
 ├── *.html, *.pdf # Exported reports
 ├── pyproject.toml, poetry.lock # Project dependencies
 └── README.md # You're here!
@@ -92,6 +92,13 @@ python -mpanel serve app.py
 ### Reproduce
 
  * Create the `data` folder and subfolders
- * Model and in-situ sample can be found at: 
+ * Model and in-situ sample can be found at:
 https://github.com/oceanmodeling/sealens/tree/master/data
  * Some (lower resolution) meshes can also be found at: https://github.com/seareport/seareport_models
+
+#### Note:
+By default, the application uses data from the `data/` folder. To test with a different folder (e.g., `data_demo/`), set the `DATA_DIR` environment variable:
+
+```bash
+export DATA_DIR=data_demo
+```

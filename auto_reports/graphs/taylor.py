@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 import holoviews as hv
 import numpy as np
 import pandas as pd
-from bokeh.models import HoverTool
 import panel as pn
-from auto_reports._io import assign_oceans
-from auto_reports._io import load_world_oceans
-from auto_reports._io import update_color_map
+from bokeh.models import HoverTool
+
 import auto_reports._render as rr
 
 hv.extension("bokeh")
@@ -19,7 +19,7 @@ def create_std_dev_circles(std_dev_range: np.ndarray) -> hv.Overlay:
         x = radius * np.cos(angle)
         y = radius * np.sin(angle)
         std_dev_circles.append(
-            hv.Curve((x, y)).opts(color="gray", line_dash="dotted", line_width=1)
+            hv.Curve((x, y)).opts(color="gray", line_dash="dotted", line_width=1),
         )
     return hv.Overlay(std_dev_circles)
 
@@ -29,9 +29,12 @@ def create_std_ref(radius: float) -> hv.Overlay:
     x = radius * np.cos(angle)
     y = radius * np.sin(angle)
     return hv.Curve((x, y)).opts(
-        color="gray", line_dash="dashed", line_width=2
+        color="gray",
+        line_dash="dashed",
+        line_width=2,
     ) * hv.Text(radius, 0.0, "REF", halign="right", valign="bottom").opts(
-        text_font_size="10pt", text_color="gray"
+        text_font_size="10pt",
+        text_color="gray",
     )
 
 
@@ -45,17 +48,23 @@ def create_corr_lines(corr_range: np.ndarray, std_dev_max: float) -> hv.Overlay:
         corr_lines.append(
             hv.Curve((x, y)).opts(color="blue", line_dash="dashed", line_width=1)
             * hv.Text(x[-1], y[-1], f"{corr:.2f}", halign="left", valign="bottom").opts(
-                text_font_size="10pt", text_color="blue"
-            )
+                text_font_size="10pt",
+                text_color="blue",
+            ),
         )
     corr_label = hv.Text(
-        0.75 * std_dev_max, 0.75 * std_dev_max, "Correlation Coefficient"
+        0.75 * std_dev_max,
+        0.75 * std_dev_max,
+        "Correlation Coefficient",
     ).opts(text_font_size="12pt", text_color="blue", angle=-45)
     return hv.Overlay(corr_lines) * corr_label
 
 
 def create_rms_contours(
-    standard_ref: float, std_dev_max: float, rms_range: np.ndarray, norm: bool
+    standard_ref: float,
+    std_dev_max: float,
+    rms_range: np.ndarray,
+    norm: bool,
 ) -> hv.Overlay:
     rms_contours = []
     for rms in rms_range:
@@ -73,7 +82,7 @@ def create_rms_contours(
                 f"{rms*100:.0f}%",
                 halign="left",
                 valign="bottom",
-            ).opts(text_font_size="10pt", text_color="green")
+            ).opts(text_font_size="10pt", text_color="green"),
         )
     label = "Centered RMS" if norm else "RMS"
     rms_label = hv.Text(
@@ -101,7 +110,10 @@ def taylor_diagram(
         std_dev_overlay = create_std_dev_circles(std_range) * create_std_ref(1)
         corr_lines_overlay = create_corr_lines(corr_range, std_range.max())
         rms_contours_overlay = create_rms_contours(
-            1, std_range.max(), rms_range, norm=norm
+            1,
+            std_range.max(),
+            rms_range,
+            norm=norm,
         )
         return std_dev_overlay * corr_lines_overlay * rms_contours_overlay
     theta = np.arccos(df["cr"])  # Convert Cr to radians for polar plot
@@ -111,7 +123,7 @@ def taylor_diagram(
     else:
         if len(df) > 1:
             raise ValueError(
-                "for not normalised Taylor diagrams, you need only 1 data point"
+                "for not normalised Taylor diagrams, you need only 1 data point",
             )
         std_ref = df["sim_std"].mean()
         std_mod = df["obs_std"].mean()
@@ -123,7 +135,10 @@ def taylor_diagram(
     std_dev_overlay = create_std_dev_circles(std_range) * create_std_ref(std_ref)
     corr_lines_overlay = create_corr_lines(corr_range, std_range.max())
     rms_contours_overlay = create_rms_contours(
-        std_ref, std_range.max(), rms_range, norm=norm
+        std_ref,
+        std_range.max(),
+        rms_range,
+        norm=norm,
     )
 
     x = std_mod * np.cos(theta)
@@ -163,23 +178,24 @@ def taylor_diagram(
     taylor_diagram = scatter_plot
     return taylor_diagram
 
+
 def taylor_panel(stats, cmap, colouring):
     T_VOID = taylor_diagram(pd.DataFrame())
     taylor = taylor_diagram(
-            stats,
-            norm=True,
-            color=colouring,
-            cmap=cmap,
-        ).opts(
-            show_grid=True,
-            show_legend=False,
-            default_tools=["pan"],
-            tools=["hover", "box_zoom", "reset", "save"],
-        )
+        stats,
+        norm=True,
+        color=colouring,
+        cmap=cmap,
+    ).opts(
+        show_grid=True,
+        show_legend=False,
+        default_tools=["pan"],
+        tools=["hover", "box_zoom", "reset", "save"],
+    )
     taylor_ = (T_VOID * taylor).opts(
-            **rr.taylor,
-            title=f"Taylor Diagram - {len(stats)} stations",
+        **rr.taylor,
+        title=f"Taylor Diagram - {len(stats)} stations",
     )
     return pn.pane.HoloViews(
-            (taylor_).opts(shared_axes=False)
-        )
+        (taylor_).opts(shared_axes=False),
+    )

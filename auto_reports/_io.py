@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-import os
-import io
-import re
-import natsort
-import itertools
 import collections
-import pandas as pd
-import numpy as np
-import typing as T
+import io
+import itertools
 import json
-import pyarrow.parquet as pq
+import os
+import typing as T
 from pathlib import Path
-import panel as pn
-import shapely
-import geopandas as gp
+
 import colorcet as cc
+import geopandas as gp
 import holoviews as hv
+import natsort
+import numpy as np
+import pandas as pd
+import panel as pn
+import pyarrow.parquet as pq
 import seareport_data as D
+import shapely
 from playwright.async_api import async_playwright
 
 from auto_reports._storms import STORMS
@@ -27,10 +27,9 @@ from auto_reports._storms import THRESHOLDS
 def _readline(fd: bytes) -> bytes:
     return fd.readline().split(b"=")[0].split(b"!")[0].strip()
 
-import auto_reports._render as rr
 
-
-DATA_DIR = Path("data")
+DATA_DIR = Path(os.environ.get("DATA_DIR", "data"))
+os.makedirs(DATA_DIR / "stats", exist_ok=True)
 OBS_DIR = DATA_DIR / "obs"
 MODEL_DIR = DATA_DIR / "models"
 OVERRIDE_CSS = """
@@ -42,6 +41,7 @@ OVERRIDE_CSS = """
     overflow: visible !important;
 }
 """
+
 
 def get_parquet_files() -> list[Path]:
     paths = natsort.natsorted(MODEL_DIR.glob("*/*.parquet"))
@@ -56,6 +56,9 @@ def get_model_paths() -> list[Path]:
 def get_model_names() -> list[str]:
     names = [path.name for path in get_model_paths()]
     return names
+
+
+print(get_model_paths())
 
 
 def get_obs_station_paths() -> list[Path]:
@@ -77,7 +80,6 @@ def get_station_names() -> list[str]:
 
 def get_parquet_attrs(path):
     pq_metadata = pq.read_metadata(path)
-    df = pd.read_parquet(path)
     return json.loads(pq_metadata.metadata[b"PANDAS_ATTRS"])
 
 
@@ -89,16 +91,18 @@ def get_observation_metadata() -> pd.DataFrame:
 @pn.cache
 def load_data(path: Path) -> pd.Series:
     df = pd.read_parquet(path)
-    if len(df.columns)==1:
+    if len(df.columns) == 1:
         column = df.columns[0]
-    else: 
+    else:
         column = "elev"
     return df[column]
 
 
 @pn.cache
-def load_world_oceans(): 
-    df = gp.read_file("https://gist.githubusercontent.com/tomsail/2fa52d9667312b586e7d3baee123b57b/raw/f121bd446e7c276e7230fb9896e4d487d63a8cb1/world_maritime_sectors.json")
+def load_world_oceans():
+    df = gp.read_file(
+        "https://gist.githubusercontent.com/tomsail/2fa52d9667312b586e7d3baee123b57b/raw/f121bd446e7c276e7230fb9896e4d487d63a8cb1/world_maritime_sectors.json",
+    )
     return df
 
 
@@ -130,6 +134,7 @@ def assign_oceans(df):
     )
     return df
 
+
 def find_storm(timestamp: pd.Timestamp, storms: dict):
     for name, dates in storms.items():
         for date in dates:
@@ -139,10 +144,10 @@ def find_storm(timestamp: pd.Timestamp, storms: dict):
     return None
 
 
-def assign_storms(ext: pd.DataFrame, region:str):
+def assign_storms(ext: pd.DataFrame, region: str):
     ext = ext.sort_values(ascending=False, by="observed").reset_index()
-    ext = ext[ext["observed"]>THRESHOLDS[region]]
-    ext['storm'] = ext['time observed'].apply(lambda x: find_storm(x,STORMS[region]))
+    ext = ext[ext["observed"] > THRESHOLDS[region]]
+    ext["storm"] = ext["time observed"].apply(lambda x: find_storm(x, STORMS[region]))
     return ext.dropna(subset="storm")
 
 
@@ -163,7 +168,7 @@ async def html_to_pdf_async(html_path, output_path):
         browser = await p.chromium.launch()
         page = await browser.new_page()
         await page.goto(f"file://{os.path.abspath(html_path)}")
-        # await page.wait_for_load_state("networkidle")          
+        # await page.wait_for_load_state("networkidle")
         await page.pdf(path=output_path, format="A4", landscape=True, scale=1)
         await browser.close()
 
@@ -187,7 +192,12 @@ def parse_hgrid(
         nodes_buffer = io.BytesIO(b"\n".join(itertools.islice(fd, 0, no_points)))
         nodes = np.loadtxt(nodes_buffer, delimiter=sep, usecols=(1, 2, 3))
         elements_buffer = io.BytesIO(b"\n".join(itertools.islice(fd, 0, no_elements)))
-        elements = np.loadtxt(elements_buffer, delimiter=sep, usecols=(2, 3, 4), dtype=int)
+        elements = np.loadtxt(
+            elements_buffer,
+            delimiter=sep,
+            usecols=(2, 3, 4),
+            dtype=int,
+        )
         elements -= 1  # 0-based index for the nodes
         rvalue["nodes"] = nodes
         rvalue["elements"] = elements
@@ -195,14 +205,20 @@ def parse_hgrid(
         if include_boundaries:
             boundaries = collections.defaultdict(list)
             no_open_boundaries = int(_readline(fd))
-            total_open_boundary_nodes = int(_readline(fd))
+            # total_open_boundary_nodes = int(_readline(fd))
             for i in range(no_open_boundaries):
                 no_nodes_in_boundary = int(_readline(fd))
-                boundary_nodes = np.genfromtxt(fd, delimiter=sep, usecols=(0,), max_rows=no_nodes_in_boundary, dtype=int)
+                boundary_nodes = np.genfromtxt(
+                    fd,
+                    delimiter=sep,
+                    usecols=(0,),
+                    max_rows=no_nodes_in_boundary,
+                    dtype=int,
+                )
                 boundaries["open"].append(boundary_nodes - 1)  # 0-based index
             # closed boundaries
             no_closed_boundaries = int(_readline(fd))
-            total_closed_boundary_nodes = int(_readline(fd))
+            # total_closed_boundary_nodes = int(_readline(fd))
             for _ in range(no_closed_boundaries):
                 # Sometimes it seems that the closed boundaries don't have a "type indicator"
                 # For example: Test_COSINE_SFBay/hgrid.gr3
@@ -214,7 +230,13 @@ def parse_hgrid(
                     boundary_type = 0
                 else:
                     no_nodes_in_boundary, boundary_type = map(int, parsed)
-                boundary_nodes = np.genfromtxt(fd, delimiter=sep, usecols=(0,), max_rows=no_nodes_in_boundary, dtype=int)
+                boundary_nodes = np.genfromtxt(
+                    fd,
+                    delimiter=sep,
+                    usecols=(0,),
+                    max_rows=no_nodes_in_boundary,
+                    dtype=int,
+                )
                 boundary_nodes -= 1  # 0-based-index
                 boundaries[boundary_type].append(boundary_nodes)
             rvalue["boundaries"] = boundaries

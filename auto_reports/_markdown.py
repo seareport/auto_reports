@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 DIMENSIONAL_METRICS = {"bias", "rms", "rmse", "mse"}
 DIMENSIONLESS_METRICS = {"cr", "kge", "lambda", "nse", "slope"}
 STORM_METRICS = {"R1", "R3", "error"}
@@ -7,50 +9,44 @@ METRIC_SNIPPETS = {
 ### Mean Error (or Bias)
 $$\langle x_o - x_m \rangle = \langle x_o \rangle - \langle x_m \rangle$$
 """,
-
     "rms": r"""
 ### RMS (Root Mean Squared)
 $$\sqrt{(\langle (x_{o} - \langle x_o \rangle)- (x_m - \langle x_m \rangle))^2 \rangle}$$
 """,
-
     "cr": r"""
 ### Correlation Coefficient (R)
 $$\frac {\langle x_{m}x_{o}\rangle -\langle x_{o}\rangle \langle x_{o}\rangle }{{\sqrt {\langle x_{m}^{2}\rangle -\langle x_{m}\rangle ^{2}}}{\sqrt {\langle x_{o}^{2}\rangle -\langle x_{o}\rangle ^{2}}}}$$
 """,
-
     "kge": r"""
 ### Kling–Gupta Efficiency (KGE)
 $$1 - \sqrt{(r-1)^2 + b^2 + (g-1)^2}$$
 
-Where:  
-* `r`: correlation  
-* `b`: modified bias $$\frac{\langle x_o \rangle - \langle x_m \rangle}{\sigma_m}$$  
+Where:
+* `r`: correlation
+* `b`: modified bias $$\frac{\langle x_o \rangle - \langle x_m \rangle}{\sigma_m}$$
 * `g`: std dev ratio $$\frac{\sigma_o}{\sigma_m}$$
 """,
-
     "lambda": r"""
 ### Lambda Index ($$\lambda$$) [ref](https://eoscience.esa.int/landtraining2017/files/materials/D5P3a_I.pdf)
 $$\lambda = 1 - \frac{\sum{(x_c - x_m)^2}}{\sum{(x_m - \overline{x}_m)^2} + \sum{(x_c - \overline{x}_c)^2} + n(\overline{x}_m - \overline{x}_c)^2 + \kappa}$$
 
-Where:  
+Where:
 * $$\kappa = 2 \cdot \left| \sum{((x_m - \overline{x}_m) \cdot (x_c - \overline{x}_c))} \right|$$
 """,
-
     "R1": r"""
 ### R1 - Error on Highest Peak
 Absolute error between the highest modelled and observed peak during storm events.
 """,
-
     "R3": r"""
 ### R3 - Mean Error on 3 Highest Peaks
 Average absolute error between the three largest observed and modelled peaks.
 """,
-
     "error": r"""
 ### Storm Mean Error
 Mean error between modelled and observed storm peaks above a defined threshold.
-"""
+""",
 }
+
 
 def generate_metrics_doc(metrics_dict):
     header = r"""
@@ -82,10 +78,15 @@ We need metrics to assess the quality of the model.
     doc_sections = [header]
 
     if dimensional_docs:
-        doc_sections.append("## A. Dimensional Statistics:\n" + "\n".join(dimensional_docs))
+        doc_sections.append(
+            "## A. Dimensional Statistics:\n" + "\n".join(dimensional_docs),
+        )
 
     if dimensionless_docs:
-        doc_sections.append("## B. Dimensionless Statistics (best closer to 1):\n" + "\n".join(dimensionless_docs))
+        doc_sections.append(
+            "## B. Dimensionless Statistics (best closer to 1):\n"
+            + "\n".join(dimensionless_docs),
+        )
 
     if storm_docs:
         intro = r"""
@@ -98,8 +99,12 @@ We select the biggest observed storms above a certain quantile, and calculate  t
         if "R3" in present_metrics:
             bullets.append("* `R3` is the mean error for the 3 biggest storms")
         if "error" in present_metrics:
-            bullets.append('* `"error"` is the mean error for the peaks above that threshold')
-        doc_sections.append(intro + "\n" + "\n".join(bullets) + "\n" + "\n".join(storm_docs))
+            bullets.append(
+                '* `"error"` is the mean error for the peaks above that threshold',
+            )
+        doc_sections.append(
+            intro + "\n" + "\n".join(bullets) + "\n" + "\n".join(storm_docs),
+        )
 
     return "\n".join(doc_sections)
 
@@ -107,16 +112,16 @@ We select the biggest observed storms above a certain quantile, and calculate  t
 def generate_report_info(metrics_dict):
     header = """# Regional Statistics Report
 
-This report presents performance statistics for ocean surge models across different regions. 
+This report presents performance statistics for ocean surge models across different regions.
 
 Use the tabs to navigate between the global view and region-specific analyses.
 """
 
     metrics_section = "## Available Metrics\n\n"
     for key in metrics_dict.keys():
-      name = key.upper()
-      desc = metrics_dict[key]
-      metrics_section += f"- **{name}**: {desc}\n"
+        name = key.upper()
+        desc = metrics_dict[key]
+        metrics_section += f"- **{name}**: {desc}\n"
 
     features_section = """
 ## Features
@@ -129,4 +134,3 @@ Use the tabs to navigate between the global view and region-specific analyses.
 """
 
     return header + "\n" + metrics_section + features_section
-
