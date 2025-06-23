@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import holoviews as hv
 import numpy as np
 import pandas as pd
 import panel as pn
+
 import auto_reports._render as rr
+
 
 # Define normalization ranges for each metric type
 def get_normalization_range(metric_name):
@@ -88,15 +92,28 @@ def hist_(src, z, z_name, g="ocean", map=None, type="box", **kwargs):
             ylabel=z_name,
         )
     return pn.pane.HoloViews(
-            (histo_.opts(
-                **kwargs
-            )).opts(shared_axes=False)
-        )
+        (
+            histo_.opts(
+                **kwargs,
+            )
+        ).opts(shared_axes=False),
+    )
+
 
 def create_spider_chart(df, region, metrics_histo, cmap):
     """Create radar chart with metric-specific value ticks on grid lines"""
     # Define which metrics should be inverted (lower is better)
-    invert_metrics = ["rmse", "rms", "rms_95", "mad", "madp", "R1", "R3", "error", "bias"]
+    invert_metrics = [
+        "rmse",
+        "rms",
+        "rms_95",
+        "mad",
+        "madp",
+        "R1",
+        "R3",
+        "error",
+        "bias",
+    ]
 
     # Calculate metrics and prepare grid tick values
     metrics_data = []
@@ -105,16 +122,20 @@ def create_spider_chart(df, region, metrics_histo, cmap):
     for m_name, m_label in zip(metrics_histo.keys(), metrics_histo.values()):
         val = df[m_name].mean()
         min_val, max_val = get_normalization_range(m_name)
-        
+
         # Special handling for bias - use absolute value for normalization
         if m_name == "bias":
             val = abs(val)  # Use absolute value of bias
-            if val > 0.2: val = 0.2
+            if val > 0.2:
+                val = 0.2
             min_val = 0  # Min absolute bias is 0
-            max_val = max(abs(get_normalization_range(m_name)[0]), 
-                          abs(get_normalization_range(m_name)[1]))  # Max absolute bias
+            max_val = max(
+                abs(get_normalization_range(m_name)[0]),
+                abs(get_normalization_range(m_name)[1]),
+            )  # Max absolute bias
         elif m_name == "kge":
-            if val < 0: val = 0
+            if val < 0:
+                val = 0
 
         # Calculate actual values for each grid level
         grid_values = []
@@ -126,78 +147,91 @@ def create_spider_chart(df, region, metrics_histo, cmap):
 
             # If this is bias, display the actual value with sign for grid labels
             if m_name == "bias" and level < 1.0:  # Only modify non-zero values
-                if level <= 0.5:  # For the first half of grid levels, show negative values
+                if (
+                    level <= 0.5
+                ):  # For the first half of grid levels, show negative values
                     actual_val = -actual_val
-            
+
             grid_values.append(actual_val)
-        
+
         # Normalize current value
         if m_name in invert_metrics:
             norm_val = 1 - ((val - min_val) / (max_val - min_val))
         else:
             norm_val = (val - min_val) / (max_val - min_val)
-            
-        metrics_data.append((m_name, m_label, val, norm_val, min_val, max_val, grid_values))
-    
+
+        metrics_data.append(
+            (m_name, m_label, val, norm_val, min_val, max_val, grid_values),
+        )
+
     # Create DataFrame
-    metrics_df = pd.DataFrame(metrics_data, 
-        columns=['name', 'label', 'value', 'norm_value', 'min', 'max', 'grid_values'])
-    
+    metrics_df = pd.DataFrame(
+        metrics_data,
+        columns=["name", "label", "value", "norm_value", "min", "max", "grid_values"],
+    )
+
     # Prepare angles (close the loop)
-    angles = np.linspace(0, 2*np.pi, len(metrics_df), endpoint=False)
+    angles = np.linspace(0, 2 * np.pi, len(metrics_df), endpoint=False)
     angles = np.concatenate((angles, [angles[0]]))
-    norm_values = metrics_df['norm_value'].tolist() + [metrics_df['norm_value'].iloc[0]]
-    
+    norm_values = metrics_df["norm_value"].tolist() + [metrics_df["norm_value"].iloc[0]]
+
     # Create radar polygon
     x = np.array(norm_values) * np.cos(angles)
     y = np.array(norm_values) * np.sin(angles)
 
     if region == "World":
-        radar = hv.Polygons([{'x': x, 'y': y}],label="World").opts(
+        radar = hv.Polygons([{"x": x, "y": y}], label="World").opts(
             fill_alpha=0.3,
-            line_width=2
+            line_width=2,
         )
     else:
-        radar = hv.Polygons([{'x': x, 'y': y}]).opts(
+        radar = hv.Polygons([{"x": x, "y": y}]).opts(
             color=cmap[region],
             fill_alpha=0.3,
             line_color=cmap[region],
-            line_width=2
+            line_width=2,
         )
-    
+
     # Create spider web grid with metric-specific value ticks
     grid_elements = []
     for level_idx, level in enumerate(grid_levels):
         # Create grid ring
         grid_x = np.cos(angles) * level
         grid_y = np.sin(angles) * level
-        grid_elements.append(hv.Curve((grid_x, grid_y)).opts(
-            color='gray', 
-            line_width=0.5, 
-            line_dash='dashed',
-            alpha=0.3
-        ))
-        
+        grid_elements.append(
+            hv.Curve((grid_x, grid_y)).opts(
+                color="gray",
+                line_width=0.5,
+                line_dash="dashed",
+                alpha=0.3,
+            ),
+        )
+
         # Add value ticks for each metric at this level
-        for metric_idx, (angle, row) in enumerate(zip(angles[:-1], metrics_df.itertuples())):
+        for metric_idx, (angle, row) in enumerate(
+            zip(angles[:-1], metrics_df.itertuples()),
+        ):
             # Position the tick label slightly inside the grid line
             label_x = 0.95 * level * np.cos(angle)
             label_y = 0.95 * level * np.sin(angle)
-            
+
             # Get the actual value for this metric at this grid level
             actual_value = row.grid_values[level_idx]
             fmt_value = f"{actual_value:.2f}"
-            
-            grid_elements.append(hv.Text(
-                label_x, label_y, 
-                fmt_value
-            ).opts(
-                text_color='gray',
-                text_font_size='6pt',
-                text_align='center',
-                text_baseline='middle'
-            ))
-    
+
+            grid_elements.append(
+                hv.Text(
+                    label_x,
+                    label_y,
+                    fmt_value,
+                ).opts(
+                    text_color="gray",
+                    text_font_size="6pt",
+                    text_align="center",
+                    text_baseline="middle",
+                ),
+            )
+
     # Create radial spokes with metric names
     label_points = []
     for i, (angle, row) in enumerate(zip(angles[:-1], metrics_df.itertuples())):
@@ -205,27 +239,29 @@ def create_spider_chart(df, region, metrics_histo, cmap):
         # Reduced from 1.15 to 1.05 to keep labels closer to the chart
         x = 0.7 * np.cos(angle)
         y = 0.7 * np.sin(angle)
-        
+
         label_points.append((x, y, f"{row.label}"))
         # Add radial spoke
-        grid_elements.append(hv.Curve(([0, np.cos(angle)], [0, np.sin(angle)])).opts(
-            color='gray',
-            line_width=0.5,
-            line_dash='dotted',
-            alpha=0.9
-        ))
-    
+        grid_elements.append(
+            hv.Curve(([0, np.cos(angle)], [0, np.sin(angle)])).opts(
+                color="gray",
+                line_width=0.5,
+                line_dash="dotted",
+                alpha=0.9,
+            ),
+        )
+
     # Create metric labels
     labels = hv.Labels(
-        pd.DataFrame(label_points, columns=['x', 'y', 'label']),
-        ['x', 'y'], 
-        'label'
+        pd.DataFrame(label_points, columns=["x", "y", "label"]),
+        ["x", "y"],
+        "label",
     ).opts(
-        text_color='black',
-        text_font_size='10pt',
-        text_align='center'
+        text_color="black",
+        text_font_size="10pt",
+        text_align="center",
     )
-    
+
     # Combine all elements
     spider = (hv.Overlay(grid_elements) * radar * labels).opts(
         **rr.radar,
@@ -234,5 +270,5 @@ def create_spider_chart(df, region, metrics_histo, cmap):
         yaxis=None,
         show_grid=False,
     )
-    
+
     return spider
