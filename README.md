@@ -1,5 +1,7 @@
 # Regional Model Performance Report
 
+![auto-report_20250616](https://github.com/user-attachments/assets/fe479755-25c7-4b9d-a9fd-56f1965e0549)
+
 This package purpose is to generate **static** HTML pages used for the dissemination of model skill assessment reports of global surge models.
 
 ## Directory Structure
