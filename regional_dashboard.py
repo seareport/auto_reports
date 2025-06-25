@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 
-import numpy as np
 import pandas as pd
 import panel as pn
 import param
@@ -11,7 +10,6 @@ from PyPDF2 import PdfMerger
 
 import auto_reports._markdown as md
 import auto_reports._render as rr
-from auto_reports._io import assign_oceans
 from auto_reports._io import assign_storms
 from auto_reports._io import get_model_names
 from auto_reports._io import html_to_pdf_async
@@ -34,20 +32,11 @@ THRESHOLD = 0.7
 QUANTILE = 0.98
 
 # Load data
-model = get_model_names()[0]
+models = get_model_names()
+print(models)
 all_stats = get_stats()
 colouring = "ocean"  # can be "name" for Maritime sectors
 excluded_stations = ["kala"]
-
-# Process data
-stats_full, stats_extreme = all_stats[model]
-stats_full = stats_full[~stats_full.index.isin(excluded_stations)]
-stats_full = assign_oceans(stats_full)
-mask = np.logical_or(
-    stats_extreme.observed > stats_extreme.observed.quantile(QUANTILE),
-    stats_extreme.model > stats_extreme.model.quantile(QUANTILE),
-)
-stats_extreme = assign_oceans(stats_extreme)
 
 metrics_histo = {
     "rms": "Root Mean Square Error",
@@ -68,24 +57,46 @@ class RegionalDashboard(param.Parameterized):
     current_region = param.String(default="World")
     export_region = param.String(default="World")
     export_status = param.String(default="")
+    model = param.String(default=models[0])
 
     def __init__(self, **params):
         super(RegionalDashboard, self).__init__(**params)
-        self.stats_full = stats_full
-        self.stats_extreme = stats_extreme
-        self.model = model
+        self.pull_stats()
         # self.regions = ["Info", "Mesh", "World"] + sorted(list(stats_full.ocean.unique()))
-        self.regions = ["Info", "World"] + sorted(list(stats_full.ocean.unique()))
-        self.region_select_options = ["World"] + sorted(list(stats_full.ocean.unique()))
+        self.regions = ["Info", "World"] + sorted(list(self.stats_full.ocean.unique()))
+        self.region_select_options = ["World"] + sorted(
+            list(self.stats_full.ocean.unique()),
+        )
         self.cmap = update_color_map(load_world_oceans(), colouring)
         self.dashboard = pn.template.MaterialTemplate()
         self.tabs = pn.Tabs()
+        self.model_dropdown = pn.widgets.Select(
+            name="Select Model",
+            options=models,
+            value="Model",
+        )
+        self.model_dropdown.param.watch(self.update_model, "value")
         self.region_dropdown = pn.widgets.Select(
             name="Select Region",
             options=self.region_select_options,
             value="World",
         )
         self.region_dropdown.param.watch(self.update_region_tab, "value")
+
+    def pull_stats(self):
+        stats_full, stats_extreme = all_stats[self.model]
+        self.stats_full = stats_full
+        self.stats_extreme = stats_extreme
+
+    def update_model(self, event):
+        """Update the current region and switch to the appropriate tab"""
+        self.model = event.new
+        self.pull_stats()
+        base_index = self.regions.index("World")
+        self.tabs[base_index] = (
+            self.current_region,
+            self.create_region_view(self.current_region),
+        )
 
     def update_region_tab(self, event):
         """Update the current region and switch to the appropriate tab"""
@@ -109,7 +120,7 @@ class RegionalDashboard(param.Parameterized):
         )
 
     def create_mesh_tab(self):
-        w, eu, flo, cb, info = bathy_maps(model)
+        w, eu, flo, cb, info = bathy_maps(self.model)
         return pn.Column(
             info,
             cb.clone(**rr.regional_bathy),
@@ -129,7 +140,6 @@ class RegionalDashboard(param.Parameterized):
             stats_ext = assign_storms(stats_ext, region)
             stats_ext = stats_ext.sort_values(by=["time observed"], ascending=[False])
             scat_pn = scatter_table(stats_ext, self.cmap[region])
-
         taylor_pn = taylor_panel(stats, self.cmap, colouring)
 
         histo_graphs = []
@@ -216,10 +226,11 @@ class RegionalDashboard(param.Parameterized):
         export_button_html.on_click(self.export_dashboard_to_html)
 
         self.dashboard = pn.template.MaterialTemplate(
-            title=f"Regional Statistics - Model {self.model}",
+            title="Regional Statistics",
             header_background="#007BFF",
             main=pn.Column(
                 pn.Row(
+                    self.model_dropdown,
                     self.region_dropdown,
                     export_button,
                     export_button_html,
