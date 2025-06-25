@@ -58,9 +58,6 @@ def get_model_names() -> list[str]:
     return names
 
 
-print(get_model_paths())
-
-
 def get_obs_station_paths() -> list[Path]:
     paths = natsort.natsorted(OBS_DIR.glob("*.parquet"))
     return paths
@@ -126,9 +123,13 @@ def find_ocean_for_station(station, oceans_df, xstr="longitude", ystr="latitude"
 
 def assign_oceans(df):
     oceans_ = load_world_oceans()
-    # Use the result_type='expand' to expand list-like results to columns
+    unique_stations = df.station.unique()
+    mapping = {}
+    for unique_station in unique_stations:
+        s = df[df.station == unique_station].iloc[0]
+        mapping[unique_station] = find_ocean_for_station(s, oceans_, "lon", "lat")
     df[["name", "ocean"]] = df.apply(
-        lambda station: find_ocean_for_station(station, oceans_, "lon", "lat"),
+        lambda station: mapping[station.station],
         axis=1,
         result_type="expand",
     )

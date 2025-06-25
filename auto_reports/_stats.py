@@ -7,6 +7,7 @@ import pandas as pd
 import seastats.storms
 from tqdm import tqdm
 
+from auto_reports._io import assign_oceans
 from auto_reports._io import DATA_DIR
 from auto_reports._io import get_model_names
 from auto_reports._io import get_obs_station_names
@@ -39,7 +40,7 @@ def run_stats(model):
             sim = load_data(f"{model}/{station}.parquet")
             info = get_parquet_attrs(OBS_DIR / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
-            normal_stats = seastats.get_stats(sim, obs, seastats.GENERAL_METRICS_ALL)
+            normal_stats = seastats.get_stats(sim_, obs, seastats.GENERAL_METRICS_ALL)
             storm_stats = seastats.get_stats(
                 sim_,
                 obs_,
@@ -51,6 +52,7 @@ def run_stats(model):
             stats[station]["lat"] = float(info["lat"])
             stats[station]["sim_std"] = sim.std()
             stats[station]["obs_std"] = obs.std()
+            stats[station]["station"] = station
         except FileNotFoundError as e:
             logger.warning(e)
     return pd.DataFrame(stats).T
@@ -92,6 +94,8 @@ def get_model_stats(model: str) -> pd.DataFrame:
     df_general = load_or_generate(stat_file, run_stats, "stats")
     extreme_stat_file = DATA_DIR / f"stats/{model}_eva.parquet"
     df_extreme = load_or_generate(extreme_stat_file, run_stats_ext, "extreme stats")
+    df_general = assign_oceans(df_general)
+    df_extreme = assign_oceans(df_extreme)
     return df_general, df_extreme
 
 
