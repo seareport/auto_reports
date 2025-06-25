@@ -140,6 +140,7 @@ class RegionalDashboard(param.Parameterized):
             stats_ext = assign_storms(stats_ext, region)
             stats_ext = stats_ext.sort_values(by=["time observed"], ascending=[False])
             scat_pn = scatter_table(stats_ext, self.cmap[region])
+        stats["cr"] = stats["cr"].astype(float)
         taylor_pn = taylor_panel(stats, self.cmap, colouring)
 
         histo_graphs = []
