@@ -7,6 +7,16 @@ import panel as pn
 
 import auto_reports._render as rr
 
+METRICS_HISTO = {
+    "rms": "Root Mean Square Error",
+    "cr": "Correlation Coefficient",
+    "bias": "Systematic Error (Bias)",
+    "kge": "Kling Gupta Efficiency",
+    "lambda": "Lambda Index",
+    "R1": "Error on Highest Peak",
+    "R3": "Error on 3 Highest Peaks",
+}
+
 
 # Define normalization ranges for each metric type
 def get_normalization_range(metric_name):

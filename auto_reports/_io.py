@@ -18,7 +18,6 @@ import panel as pn
 import pyarrow.parquet as pq
 import seareport_data as D
 import shapely
-from playwright.async_api import async_playwright
 
 from auto_reports._storms import STORMS
 from auto_reports._storms import THRESHOLDS
@@ -162,16 +161,6 @@ def update_color_map(df, filter_var):
         for i, ocean in enumerate(unique_oceans)
     }
     return ocean_mapping
-
-
-async def html_to_pdf_async(html_path, output_path):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page()
-        await page.goto(f"file://{os.path.abspath(html_path)}")
-        # await page.wait_for_load_state("networkidle")
-        await page.pdf(path=output_path, format="A4", landscape=True, scale=1)
-        await browser.close()
 
 
 @pn.cache

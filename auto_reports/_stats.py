@@ -4,6 +4,7 @@ import logging
 import os
 
 import pandas as pd
+import panel as pn
 import seastats.storms
 from tqdm import tqdm
 
@@ -17,7 +18,7 @@ from auto_reports._io import MODEL_DIR
 from auto_reports._io import OBS_DIR
 
 logger = logging.getLogger(name="auto-report")
-CLUSTER_DURATION = 24
+CLUSTER_DURATION = 72
 
 
 def sim_on_obs(sim, obs):
@@ -99,6 +100,7 @@ def get_model_stats(model: str) -> pd.DataFrame:
     return df_general, df_extreme
 
 
+@pn.cache
 def get_stats(model=None) -> dict[pd.DataFrame]:
     if model:
         models = [model]
