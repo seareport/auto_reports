@@ -142,7 +142,7 @@ def bathy_maps(model):
 
 
 # Interactive map
-def map_panel(stats, cmap, ocean_or_sector, region):
+def map_gv(stats, cmap, ocean_or_sector, region):
     countries = load_countries()
     gdf = load_world_oceans()
     points = gv.Points(stats, kdims=["lon", "lat"], vdims=["index"])
@@ -150,7 +150,7 @@ def map_panel(stats, cmap, ocean_or_sector, region):
 
     if region != "World":
         gdf = gdf[gdf[ocean_or_sector] == region]
-    map_plot = (
+    return (
         gdf.hvplot(color=ocean_or_sector, geo=True).opts(
             cmap=cmap,
             **rr.map_region,
@@ -158,11 +158,4 @@ def map_panel(stats, cmap, ocean_or_sector, region):
         )
         * map_
         * points.opts(color="r", line_color="k", size=7, tools=["hover"])
-    )
-    return pn.pane.HoloViews(
-        map_plot.opts(
-            shared_axes=False,
-            xaxis=None,
-            yaxis=None,
-        ),
     )
