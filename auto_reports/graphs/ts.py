@@ -46,6 +46,8 @@ def plot_ts(models, all_stats, region, cmap):
         if storm:
             min_time = pd.Timestamp(min(STORMS[region][storm])) - pd.Timedelta(days=10)
             max_time = pd.Timestamp(max(STORMS[region][storm])) + pd.Timedelta(days=10)
+            min_time = max(pd.Timestamp(2022, 1, 1), min_time)
+            max_time = min(pd.Timestamp(2024, 12, 31, 23), max_time)
             stations_impacted = df[df.storm == storm].station.values
             timeseries = []
             for station in stations_impacted:
