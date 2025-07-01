@@ -4,7 +4,7 @@ import os
 
 os.environ["DATA_DIR"] = "data_demo"  # noqa: E402
 import panel as pn  # noqa: E402
-from regional_dashboard import RegionalDashboard  # noqa: E402
+from dashboards.regional_dashboard import RegionalDashboard  # noqa: E402
 
 import logging  # noqa: E402
 

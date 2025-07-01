@@ -20,7 +20,7 @@ from auto_reports._storms import STORMS
 OPTS = dict(
     show_grid=True,
     active_tools=["box_zoom"],
-    line_width=1,
+    line_width=1.5,
     line_alpha=0.8,
     width=800,
     height=300,
@@ -31,21 +31,38 @@ OPTS = dict(
 transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
 
 
-def plot_ts(models, all_stats, region, cmap):
-    extremes = {model: assign_storms(all_stats[model][1], region) for model in models}
-    storms = extremes[models[0]].storm.unique()
-    storm_selector = pn.widgets.Select(
-        name="Storms",
-        value=storms[-1] if len(storms) > 0 else None,
-        options=sorted(storms.tolist()),
+def plot_ts(models_all, all_stats, region, cmap):
+    extremes = {
+        model: assign_storms(all_stats[model][1], region) for model in models_all
+    }
+    storms = extremes[models_all[0]].storm.unique()
+
+    region_storms = {s: STORMS[region][s] for s in storms}
+    options = {
+        f"{dates[0]} - {storm_name}": storm_name
+        for storm_name, dates in region_storms.items()
+    }
+    sorted_options = {k: options[k] for k in sorted(options.keys())}
+
+    model_selector = pn.widgets.CrossSelector(
+        name="Models",
+        value=models_all,
+        options=models_all,
+        **rr.model_cross_selector,
     )
 
-    @pn.depends(storm_selector.param.value)
-    def ts_panel(storm):
-        df = extremes[models[0]]
-        if storm:
-            min_time = pd.Timestamp(min(STORMS[region][storm])) - pd.Timedelta(days=10)
-            max_time = pd.Timestamp(max(STORMS[region][storm])) + pd.Timedelta(days=10)
+    storm_selector = pn.widgets.Select(
+        name="Storms",
+        value=storms[-1] if len(sorted_options) > 0 else None,
+        options=sorted_options,
+    )
+
+    @pn.depends(storm_selector.param.value, model_selector.param.value)
+    def ts_panel(storm, models):
+        if (storm) and (len(models) > 0):
+            df = extremes[models[0]]
+            min_time = pd.Timestamp(min(STORMS[region][storm])) - pd.Timedelta(days=4)
+            max_time = pd.Timestamp(max(STORMS[region][storm])) + pd.Timedelta(days=4)
             min_time = max(pd.Timestamp(2022, 1, 1), min_time)
             max_time = min(pd.Timestamp(2024, 12, 31, 23), max_time)
             stations_impacted = df[df.storm == storm].station.values
@@ -61,38 +78,44 @@ def plot_ts(models, all_stats, region, cmap):
                     for model in models
                 }
                 # plots
+                storm_peaks = extremes[models[0]]
+                storm_peak = storm_peaks[
+                    (storm_peaks.station == station) & (storm_peaks.storm == storm)
+                ]
                 curve = hv.Curve(obs, label="obs").opts(
                     color="lightgrey",
                     **OPTS,
                     title=station,
+                ) * storm_peak.hvplot.scatter(
+                    x="time observed",
+                    y="observed",
+                    s=50,
+                    c="lightgrey",
+                    label="obs",
                 )
                 for i, (model, ts) in enumerate(sims.items()):
-                    curve *= hv.Curve(ts, label=f"{model}").opts(
-                        color=cc.glasbey_dark[i],
-                        **OPTS,
-                    )
                     storm_peaks = extremes[model]
                     storm_peak = storm_peaks[
                         (storm_peaks.station == station) & (storm_peaks.storm == storm)
                     ]
-                    curve *= storm_peak.hvplot.scatter(
-                        x="time observed",
-                        y="observed",
-                        s=100,
-                        c="lightgrey",
-                    )
-                    curve *= storm_peak.hvplot.scatter(
+                    curve *= hv.Curve(ts, label=f"{model}").opts(
+                        color=cc.glasbey_dark[i],
+                        **OPTS,
+                    ) * storm_peak.hvplot.scatter(
                         x="time model",
                         y="model",
-                        s=100,
+                        s=50,
                         c=cc.glasbey_dark[i],
+                        label=f"{model}",
                     )
+
                 timeseries.append(curve)
             layout = (
                 hv.Layout(timeseries)
                 .cols(1)
                 .opts(
                     title=storm,
+                    shared_axes=False,
                 )
             )
             return layout
@@ -107,8 +130,8 @@ def plot_ts(models, all_stats, region, cmap):
 
     @pn.depends(storm_selector.param.value)
     def ts_map_hv(storm):
-        df = extremes[models[0]]
-        stats = all_stats[models[0]][0]
+        df = extremes[models_all[0]]
+        stats = all_stats[models_all[0]][0]
         if df.empty:
             return gv.Points((0, 0)) * gv.Points((0, 0))
         points = stats.hvplot.points(
@@ -143,4 +166,13 @@ def plot_ts(models, all_stats, region, cmap):
         x1, y1 = transformer.transform(xmax, ymax)
         return (points * map_hv).opts(xlim=(x0, x1), ylim=(y0, y1), **rr.map_region)
 
-    return pn.Row(storm_selector, ts_panel, ts_map_hv)
+    return pn.Row(
+        pn.Column(
+            pn.pane.Markdown("## Select Storm:"),
+            storm_selector,
+            pn.pane.Markdown("## Select Model:"),
+            model_selector,
+        ),
+        ts_panel,
+        ts_map_hv,
+    )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 os.environ["DATA_DIR"] = "data_demo"  # noqa: E402
-from storms_dashboard import StormDashboard  # noqa: E402
+from dashboards.storms_dashboard import StormDashboard  # noqa: E402
 
 import logging  # noqa: E402
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from regional_dashboard import RegionalDashboard
+from dashboards.regional_dashboard import RegionalDashboard
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
