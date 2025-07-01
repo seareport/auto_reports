@@ -33,6 +33,11 @@ cross_selector = {
     "height": 550,
 }
 
+model_cross_selector = {
+    "width": 400,
+    "height": 550,
+}
+
 scatter = {
     "width": 500,
     "height": 600,
