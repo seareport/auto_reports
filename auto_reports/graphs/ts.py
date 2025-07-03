@@ -12,9 +12,8 @@ from pyproj import Transformer
 
 import auto_reports._render as rr
 from auto_reports._io import assign_storms
-from auto_reports._io import DATA_DIR
+from auto_reports._io import get_obs_dir
 from auto_reports._io import load_data
-from auto_reports._io import OBS_DIR
 from auto_reports._storms import STORMS
 
 OPTS = dict(
@@ -31,7 +30,8 @@ OPTS = dict(
 transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
 
 
-def plot_ts(models_all, all_stats, region, cmap):
+def plot_ts(models_all, all_stats, region, cmap, data_dir):
+    obs_dir = get_obs_dir(data_dir)
     extremes = {
         model: assign_storms(all_stats[model][1], region) for model in models_all
     }
@@ -68,12 +68,12 @@ def plot_ts(models_all, all_stats, region, cmap):
             stations_impacted = df[df.storm == storm].station.values
             timeseries = []
             for station in stations_impacted:
-                obs_file = glob.glob(f"{OBS_DIR}/{station}*.parquet")[0]
+                obs_file = glob.glob(f"{obs_dir}/{station}*.parquet")[0]
                 obs = load_data(obs_file)
                 obs = obs.loc[min_time:max_time]
                 sims = {
                     model: load_data(
-                        DATA_DIR / f"models/{model}/{station}.parquet",
+                        data_dir / f"models/{model}/{station}.parquet",
                     ).loc[min_time:max_time]
                     for model in models
                 }

@@ -27,10 +27,6 @@ def _readline(fd: bytes) -> bytes:
     return fd.readline().split(b"=")[0].split(b"!")[0].strip()
 
 
-DATA_DIR = Path(os.environ.get("DATA_DIR", "data"))
-os.makedirs(DATA_DIR / "stats", exist_ok=True)
-OBS_DIR = DATA_DIR / "obs"
-MODEL_DIR = DATA_DIR / "models"
 OVERRIDE_CSS = """
 :root {
     --hidden: initial !important;
@@ -42,23 +38,37 @@ OVERRIDE_CSS = """
 """
 
 
-def get_parquet_files() -> list[Path]:
-    paths = natsort.natsorted(MODEL_DIR.glob("*/*.parquet"))
+def get_data_dir(data_dir: str | Path) -> Path:
+    return Path(data_dir)
+
+
+def get_obs_dir(data_dir: str | Path) -> Path:
+    return Path(data_dir) / "obs"
+
+
+def get_models_dir(data_dir: str | Path) -> Path:
+    return Path(data_dir) / "models"
+
+
+def get_parquet_files(data_dir: str | Path) -> list[Path]:
+    model_dir = get_models_dir(data_dir)
+    paths = natsort.natsorted(model_dir.glob("*/*.parquet"))
     return paths
 
 
-def get_model_paths() -> list[Path]:
-    paths = natsort.natsorted(set(path.parent for path in get_parquet_files()))
+def get_model_paths(data_dir: str | Path) -> list[Path]:
+    paths = natsort.natsorted(set(path.parent for path in get_parquet_files(data_dir)))
     return paths
 
 
-def get_model_names() -> list[str]:
-    names = [path.name for path in get_model_paths()]
+def get_model_names(data_dir: str | Path) -> list[str]:
+    names = [path.name for path in get_model_paths(data_dir)]
     return names
 
 
-def get_obs_station_paths() -> list[Path]:
-    paths = natsort.natsorted(OBS_DIR.glob("*.parquet"))
+def get_obs_station_paths(data_dir: str | Path) -> list[Path]:
+    obs_dir = get_obs_dir(data_dir)
+    paths = natsort.natsorted(obs_dir.glob("*.parquet"))
     return paths
 
 

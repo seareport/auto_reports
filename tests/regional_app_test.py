@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
+import logging
 
-os.environ["DATA_DIR"] = "data_demo"  # noqa: E402
-import panel as pn  # noqa: E402
-from dashboards.regional_dashboard import RegionalDashboard  # noqa: E402
+import panel as pn
 
-import logging  # noqa: E402
+from dashboards.regional_dashboard import RegionalDashboard
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -14,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def test_dashboard_from_demo_data():
     logger.debug("Creating dashboard instance from data_demo...")
-    instance = RegionalDashboard()
+    instance = RegionalDashboard(data_dir="data_demo")
     instance.create_dashboard()
 
     assert instance.dashboard is not None
