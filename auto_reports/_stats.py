@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 import pandas as pd
 import panel as pn
@@ -9,13 +10,12 @@ import seastats.storms
 from tqdm import tqdm
 
 from auto_reports._io import assign_oceans
-from auto_reports._io import DATA_DIR
 from auto_reports._io import get_model_names
+from auto_reports._io import get_models_dir
+from auto_reports._io import get_obs_dir
 from auto_reports._io import get_obs_station_names
 from auto_reports._io import get_parquet_attrs
 from auto_reports._io import load_data
-from auto_reports._io import MODEL_DIR
-from auto_reports._io import OBS_DIR
 
 logger = logging.getLogger(name="auto-report")
 CLUSTER_DURATION = 72
@@ -32,14 +32,16 @@ def sim_on_obs(sim, obs):
     return sim_, obs_
 
 
-def run_stats(model):
+def run_stats(data_dir: Path, model: str):
     stats = {}
-    for station_sensor in tqdm(get_obs_station_names()):
+    obs_dir = get_obs_dir(data_dir)
+    model_dir = get_models_dir(data_dir) / model
+    for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = station_sensor.split("_")
         try:
-            obs = load_data(OBS_DIR / f"{station_sensor}.parquet")
-            sim = load_data(f"{model}/{station}.parquet")
-            info = get_parquet_attrs(OBS_DIR / f"{station_sensor}.parquet")
+            obs = load_data(obs_dir / f"{station_sensor}.parquet")
+            sim = load_data(model_dir / f"{station}.parquet")
+            info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
             normal_stats = seastats.get_stats(sim_, obs, seastats.GENERAL_METRICS_ALL)
             storm_stats = seastats.get_stats(
@@ -59,14 +61,16 @@ def run_stats(model):
     return pd.DataFrame(stats).T
 
 
-def run_stats_ext(model):
+def run_stats_ext(data_dir: Path, model: str):
     extreme_events = pd.DataFrame()
-    for station_sensor in tqdm(get_obs_station_names()):
+    obs_dir = get_obs_dir(data_dir)
+    model_dir = get_models_dir(data_dir) / model
+    for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = station_sensor.split("_")
         try:
-            obs = load_data(OBS_DIR / f"{station_sensor}.parquet")
-            sim = load_data(f"{model}/{station}.parquet")
-            info = get_parquet_attrs(OBS_DIR / f"{station_sensor}.parquet")
+            obs = load_data(obs_dir / f"{station_sensor}.parquet")
+            sim = load_data(model_dir / f"{station}.parquet")
+            info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
             ext_ = seastats.storms.match_extremes(sim_, obs_, quantile=0.995)
             ext_["lon"] = float(info["lon"])
@@ -78,35 +82,40 @@ def run_stats_ext(model):
     return extreme_events
 
 
-def get_model_stats(model: str) -> pd.DataFrame:
-    def load_or_generate(file_path, stats_func, file_name):
+def get_model_stats(data_dir: Path, model: str) -> pd.DataFrame:
+    def load_or_generate(file_path, stats_func, file_name, data_dir):
         if os.path.exists(file_path):
             logger.info(f"File {file_path} already exists")
             return pd.read_parquet(file_path)
         else:
             logger.info(f"No file {file_path} found.")
             logger.info(f"Running {file_name} for model {model}")
-            path = MODEL_DIR / model
-            df = stats_func(path)
+            df = stats_func(data_dir, model)
             df.to_parquet(file_path)
             return df
 
-    stat_file = DATA_DIR / f"stats/{model}.parquet"
-    df_general = load_or_generate(stat_file, run_stats, "stats")
-    extreme_stat_file = DATA_DIR / f"stats/{model}_eva.parquet"
-    df_extreme = load_or_generate(extreme_stat_file, run_stats_ext, "extreme stats")
+    stat_file = data_dir / f"stats/{model}.parquet"
+    df_general = load_or_generate(stat_file, run_stats, "stats", data_dir)
+    extreme_stat_file = data_dir / f"stats/{model}_eva.parquet"
+    df_extreme = load_or_generate(
+        extreme_stat_file,
+        run_stats_ext,
+        "extreme stats",
+        data_dir,
+    )
     df_general = assign_oceans(df_general)
     df_extreme = assign_oceans(df_extreme)
     return df_general, df_extreme
 
 
 @pn.cache
-def get_stats(model=None) -> dict[pd.DataFrame]:
+def get_stats(data_dir, model=None) -> dict[pd.DataFrame]:
+    os.makedirs(Path(data_dir) / "stats", exist_ok=True)
     if model:
         models = [model]
     else:
-        models = get_model_names()
+        models = get_model_names(data_dir)
     all_stats = {}
     for m in models:
-        all_stats[m] = get_model_stats(m)
+        all_stats[m] = get_model_stats(Path(data_dir), m)
     return all_stats

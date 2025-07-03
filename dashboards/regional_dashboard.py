@@ -9,7 +9,7 @@ import param
 import auto_reports._markdown as md
 import auto_reports._render as rr
 from auto_reports._io import assign_storms
-from auto_reports._io import get_model_names
+from auto_reports._io import get_data_dir
 from auto_reports._io import load_world_oceans
 from auto_reports._io import OVERRIDE_CSS
 from auto_reports._io import update_color_map
@@ -28,10 +28,6 @@ logger = logging.getLogger(name="auto-report")
 THRESHOLD = 0.7
 QUANTILE = 0.98
 
-# Load data
-models = get_model_names()
-print(models)
-all_stats = get_stats()
 colouring = "ocean"  # can be "name" for Maritime sectors
 excluded_stations = ["kala"]
 
@@ -43,10 +39,13 @@ class RegionalDashboard(param.Parameterized):
     current_region = param.String(default="World")
     export_region = param.String(default="World")
     export_status = param.String(default="")
-    model = param.String(default=models[0])
 
-    def __init__(self, **params):
+    def __init__(self, data_dir="data", **params):
         super().__init__(**params)
+        self.data_dir = get_data_dir(data_dir)
+        self.all_stats = get_stats(self.data_dir)
+        self.models = sorted(self.all_stats.keys())
+        self.model = self.models[0]
         self.pull_stats()
         self.regions = ["Info", "World"] + sorted(list(self.stats_full.ocean.unique()))
         self.region_select_options = ["World"] + sorted(
@@ -57,7 +56,7 @@ class RegionalDashboard(param.Parameterized):
         self.tabs = pn.Tabs()
         self.model_dropdown = pn.widgets.Select(
             name="Select Model",
-            options=models,
+            options=self.models,
             value="Model",
         )
         self.model_dropdown.param.watch(self.update_model, "value")
@@ -69,7 +68,7 @@ class RegionalDashboard(param.Parameterized):
         self.region_dropdown.param.watch(self.update_region_tab, "value")
 
     def pull_stats(self):
-        stats_full, stats_extreme = all_stats[self.model]
+        stats_full, stats_extreme = self.all_stats[self.model]
         self.stats_full = stats_full
         self.stats_extreme = stats_extreme
 

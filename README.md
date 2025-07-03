@@ -46,11 +46,13 @@ python -mpanel serve app.py
 
 ### Reproduce
 
- * Create the `data` folder and subfolders. By default, the application uses data from the `data/` folder. To test with a different folder (e.g., `data_demo/`), set the `DATA_DIR` environment variable:
+ * Create the `data` folder and subfolders. By default, the application uses data from the `data/` folder. To test with a different folder (e.g., `data_demo/`), set the `data_dir` as initial varible in the dashboard:
 
-```bash
-export DATA_DIR=data_demo
+```python
+instance = RegionalDashboard(data_dir="data_swl")
 ```
+
+
 follow the directory structure below:
 
 ### Directory Structure

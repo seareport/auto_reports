@@ -10,6 +10,6 @@ logger = logging.getLogger(__name__)
 # Create and display the dashboard
 logger.debug("Creating dashboard instance...")
 # Create and display the dashboard
-instance = RegionalDashboard()
+instance = RegionalDashboard("data_swl")
 instance.create_dashboard()
 instance.dashboard.servable()
