@@ -32,7 +32,7 @@ def sim_on_obs(sim, obs):
     return sim_, obs_
 
 
-def run_stats(model: str, data_dir: Path):
+def run_stats(data_dir: Path, model: str):
     stats = {}
     obs_dir = get_obs_dir(data_dir)
     model_dir = get_models_dir(data_dir) / model
@@ -82,7 +82,7 @@ def run_stats_ext(data_dir: Path, model: str):
     return extreme_events
 
 
-def get_model_stats(model: str, data_dir: Path) -> pd.DataFrame:
+def get_model_stats(data_dir: Path, model: str) -> pd.DataFrame:
     def load_or_generate(file_path, stats_func, file_name, data_dir):
         if os.path.exists(file_path):
             logger.info(f"File {file_path} already exists")
@@ -117,5 +117,5 @@ def get_stats(data_dir, model=None) -> dict[pd.DataFrame]:
         models = get_model_names(data_dir)
     all_stats = {}
     for m in models:
-        all_stats[m] = get_model_stats(m, Path(data_dir))
+        all_stats[m] = get_model_stats(Path(data_dir), m)
     return all_stats
