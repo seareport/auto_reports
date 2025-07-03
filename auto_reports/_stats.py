@@ -36,7 +36,7 @@ def run_stats(model: str, data_dir: Path):
     stats = {}
     obs_dir = get_obs_dir(data_dir)
     model_dir = get_models_dir(data_dir) / model
-    for station_sensor in tqdm(get_obs_station_names()):
+    for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = station_sensor.split("_")
         try:
             obs = load_data(obs_dir / f"{station_sensor}.parquet")
@@ -65,7 +65,7 @@ def run_stats_ext(data_dir: Path, model: str):
     extreme_events = pd.DataFrame()
     obs_dir = get_obs_dir(data_dir)
     model_dir = get_models_dir(data_dir) / model
-    for station_sensor in tqdm(get_obs_station_names()):
+    for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = station_sensor.split("_")
         try:
             obs = load_data(obs_dir / f"{station_sensor}.parquet")
