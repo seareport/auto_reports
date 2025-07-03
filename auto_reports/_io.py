@@ -72,13 +72,13 @@ def get_obs_station_paths(data_dir: str | Path) -> list[Path]:
     return paths
 
 
-def get_obs_station_names() -> list[str]:
-    names = [path.stem for path in get_obs_station_paths()]
+def get_obs_station_names(data_dir: str | Path) -> list[str]:
+    names = [path.stem for path in get_obs_station_paths(data_dir)]
     return names
 
 
-def get_station_names() -> list[str]:
-    stations = set(get_obs_station_names())
+def get_station_names(data_dir: str | Path) -> list[str]:
+    stations = set(get_obs_station_names(data_dir))
     for model in get_model_paths():
         stations.update(path.stem for path in model.glob("*.parquet"))
     return natsort.natsorted(stations)
@@ -89,8 +89,10 @@ def get_parquet_attrs(path):
     return json.loads(pq_metadata.metadata[b"PANDAS_ATTRS"])
 
 
-def get_observation_metadata() -> pd.DataFrame:
-    df = pd.DataFrame(get_parquet_attrs(path) for path in get_obs_station_paths())
+def get_observation_metadata(data_dir: str | Path) -> pd.DataFrame:
+    df = pd.DataFrame(
+        get_parquet_attrs(path) for path in get_obs_station_paths(data_dir)
+    )
     return df
 
 
