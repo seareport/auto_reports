@@ -57,8 +57,29 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
         options=sorted_options,
     )
 
-    @pn.depends(storm_selector.param.value, model_selector.param.value)
-    def ts_panel(storm, models):
+    demean_checkbox = pn.widgets.Checkbox(name="Demean Obs", value=True)
+
+    selector_panel = pn.Column(
+        pn.pane.Markdown(f"### Select from {len(models_all)} models"),
+        model_selector,
+        pn.pane.Markdown(f"### Select from {len(sorted_options)} storms"),
+        storm_selector,
+    )
+
+    toggle_btn = pn.widgets.Button(name="Hide", button_type="primary")
+
+    def toggle_visibility(event):
+        selector_panel.visible = not selector_panel.visible
+        toggle_btn.name = "Show" if not selector_panel.visible else "Hide"
+
+    toggle_btn.on_click(toggle_visibility)
+
+    @pn.depends(
+        storm_selector.param.value,
+        model_selector.param.value,
+        demean_checkbox.param.value,
+    )
+    def ts_panel(storm, models, demean):
         if (storm) and (len(models) > 0):
             df = extremes[models[0]]
             min_time = pd.Timestamp(min(STORMS[region][storm])) - pd.Timedelta(days=4)
@@ -66,11 +87,21 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
             min_time = max(pd.Timestamp(2022, 1, 1), min_time)
             max_time = min(pd.Timestamp(2024, 12, 31, 23), max_time)
             stations_impacted = df[df.storm == storm].station.values
+            if len(stations_impacted) > 15:
+                storm_peaks = extremes[models[0]]
+                subset = storm_peaks[
+                    storm_peaks.station.isin(stations_impacted)
+                    & (storm_peaks.storm == storm)
+                ].iloc[:15]
+                stations_impacted = subset.station.unique()
             timeseries = []
             for station in stations_impacted:
                 obs_file = glob.glob(f"{obs_dir}/{station}*.parquet")[0]
                 obs = load_data(obs_file)
                 obs = obs.loc[min_time:max_time]
+                if demean:
+                    mean = obs.mean()
+                    obs = obs - mean
                 sims = {
                     model: load_data(
                         data_dir / f"models/{model}/{station}.parquet",
@@ -82,6 +113,9 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
                 storm_peak = storm_peaks[
                     (storm_peaks.station == station) & (storm_peaks.storm == storm)
                 ]
+                if demean:
+                    storm_peak.loc[:, "observed"] -= mean
+
                 curve = hv.Curve(obs, label="obs").opts(
                     color="lightgrey",
                     **OPTS,
@@ -168,11 +202,9 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
 
     return pn.Row(
         pn.Column(
-            pn.pane.Markdown("## Select Storm:"),
-            storm_selector,
-            pn.pane.Markdown("## Select Model:"),
-            model_selector,
+            pn.Row(toggle_btn, demean_checkbox),
+            selector_panel,
         ),
-        ts_panel,
-        ts_map_hv,
+        pn.panel(ts_panel),
+        pn.panel(ts_map_hv),
     )
