@@ -5,6 +5,26 @@ histogram = {
     "height": 70,
 }
 
+time_series = {
+    "width": 800,
+    "height": 500,
+}
+
+progress = {
+    "width": 300,
+    "height": 300,
+}
+
+tidal_barchart_relative = {
+    "height": 600,
+    "width": 400,
+}
+
+tidal_barchart_absolute = {
+    "height": 600,
+    "width": 600,
+}
+
 histo_offset = {"margin": "0 0 0 0"}  # top right bottom left
 
 taylor = {
@@ -16,6 +36,11 @@ taylor_offset = {"margin": "0 0 0 0"}  # top right bottom left
 map_region = {
     "width": 500,
     "height": 470,
+}
+
+tide_map = {
+    "width": 800,
+    "height": 900,
 }
 
 radar = {

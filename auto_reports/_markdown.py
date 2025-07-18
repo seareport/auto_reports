@@ -3,6 +3,22 @@ from __future__ import annotations
 DIMENSIONAL_METRICS = {"bias", "rms", "rmse", "mse"}
 DIMENSIONLESS_METRICS = {"cr", "kge", "lambda", "nse", "slope"}
 STORM_METRICS = {"R1", "R3", "error"}
+SCORE_MD = """
+## 📈 Score Calculation
+
+The progress wheel here reflects a **performance score** calculated as:
+
+$$
+\\boxed{
+\\text{score} = \\text{corr} \\times (1 - \\text{rss})
+}
+$$
+
+Where:
+
+- **corr** is the Pearson correlation coefficient between model and observed data (ranges from 0 to 1).
+- **rss** is the residual sum of squares, of tidal consituents amplitudes.
+"""
 
 METRIC_SNIPPETS = {
     "bias": r"""

@@ -68,7 +68,7 @@ class RegionalDashboard(param.Parameterized):
         self.region_dropdown.param.watch(self.update_region_tab, "value")
 
     def pull_stats(self):
-        stats_full, stats_extreme = self.all_stats[self.model]
+        stats_full, stats_extreme, _ = self.all_stats[self.model]
         self.stats_full = stats_full
         self.stats_extreme = stats_extreme
 

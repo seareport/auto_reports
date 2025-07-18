@@ -18,11 +18,11 @@ dependencies = [
     "geopandas (>=1.0.1,<2.0.0)",
     "seareport-data (>=0.2.4,<0.3.0)",
     "geoviews (>=1.14.0,<2.0.0)",
-    "pytest-playwright (>=0.7.0,<0.8.0)",
-    "pypdf2 (>=3.0.1,<4.0.0)",
     "jupyter-bokeh (>=4.0.5,<5.0.0)",
     "pyproj (>=3.7.1,<4.0.0)",
     "seastats (>=0.1.1,<0.2.0)",
+    "utide (>=0.3.1,<0.4.0)",
+    "pytides2 @ git+https://github.com/tomsail/pytides",
 ]
 
 

@@ -159,3 +159,22 @@ def map_gv(stats, cmap, ocean_or_sector, region):
         * map_
         * points.opts(color="r", line_color="k", size=7, tools=["hover"])
     )
+
+
+# tide map
+def tide_map(df):
+    station_points = df.hvplot.points(
+        x="lon",
+        y="lat",
+        geo=True,
+        c="score",
+        line_color="k",
+        cmap="rainbow4_r",
+        size=200,
+        tiles="CartoLight",
+        hover_cols=["station", "score", "corr", "rss"],
+        title="Simulation Score by Station",
+        tools=["tap"],
+        nonselection_alpha=0.6,
+    )
+    return station_points
