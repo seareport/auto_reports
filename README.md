@@ -1,10 +1,11 @@
 # Regional Model Performance Report
 
-![auto-report_20250616](https://github.com/user-attachments/assets/fe479755-25c7-4b9d-a9fd-56f1965e0549)
-
 This package purpose is to generate **static** HTML pages used for the dissemination of model skill assessment reports of global surge models.
 
 ## Features
+
+### Regional Statistics Dashboard
+![auto-report_20250616](https://github.com/user-attachments/assets/fe479755-25c7-4b9d-a9fd-56f1965e0549)
 
 - **Multi-tab Dashboard**: Visual exploration by ocean region including info, mesh, and metric views.
 - **Key Metrics**:
@@ -24,6 +25,13 @@ This package purpose is to generate **static** HTML pages used for the dissemina
 - **Export Capabilities**:
   - Export all tabs to a single PDF file.
   - Save interactive dashboard as standalone HTML.
+
+### Historical Storm Eventscomparison
+<img width="1568" height="794" alt="image" src="https://github.com/user-attachments/assets/e9dfcc12-0717-48f5-9b51-ee0fce1c5f02" />
+
+### Tidal Dashboard 
+<img width="1908" height="1054" alt="image" src="https://github.com/user-attachments/assets/8f83ca81-d990-4688-8906-f17c46214a55" />
+
 
 ## Getting Started
 
