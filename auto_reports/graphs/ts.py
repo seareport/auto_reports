@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import glob
+import typing as T
 
 import colorcet as cc
 import geoviews as gv
@@ -14,6 +15,7 @@ import auto_reports._render as rr
 from auto_reports._io import assign_storms
 from auto_reports._io import get_obs_dir
 from auto_reports._io import load_data
+from auto_reports._stats import sim_on_obs
 from auto_reports._storms import STORMS
 
 OPTS = dict(
@@ -207,4 +209,72 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
         ),
         pn.panel(ts_panel),
         pn.panel(ts_map_hv),
+    )
+
+
+def data_availability(series: pd.Series, freq="60min") -> float:
+    resampled = series.resample(freq).mean()
+    data_avail_ratio = 1 - resampled.isna().sum() / len(resampled)
+    return float(data_avail_ratio)
+
+
+def generate_tide_ts(
+    obs: pd.Series,
+    sim: pd.Series,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    cmap: dict,
+) -> T.Tuple[hv.Curve, float, float]:
+    ts_sim_obs, _ = sim_on_obs(
+        sim.loc[start_date:end_date],
+        obs.loc[start_date:end_date],
+    )
+
+    df_sim_obs = pd.concat(
+        {
+            "sim": ts_sim_obs,
+            "obs": obs.loc[start_date:end_date],
+        },
+        axis=1,
+    )
+
+    corr_matrix = df_sim_obs.corr(method="pearson")
+    corr_sim = corr_matrix.loc["sim", "obs"]
+
+    ts_plot = (
+        df_sim_obs.resample("20min")
+        .mean()
+        .shift(freq="10min")
+        .hvplot(
+            xlabel="Date",
+            ylabel="Water Level (m)",
+            grid=True,
+            title=f"Model vs Obs - corr={corr_sim:.2f}",
+            line_width=1.5,
+            color=list(cmap.values()),
+            **rr.time_series,
+        )
+    )
+
+    return ts_plot, corr_sim
+
+
+def empty_time_series_plot(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+):
+    dates = pd.date_range(start_date, end_date, freq=pd.Timedelta("20min"))
+    df_empty = pd.DataFrame(index=dates, columns=["sim", "obs"])
+    df_empty = df_empty.astype(float)
+
+    return df_empty.hvplot(
+        xlabel="Date",
+        ylabel="Water Level (m)",
+        grid=True,
+        title="Tidal TS empty",
+        width=800,
+        height=300,
+        line_width=2,
+    ).opts(
+        **rr.time_series,
     )
