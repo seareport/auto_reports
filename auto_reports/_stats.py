@@ -145,7 +145,7 @@ def run_stats_tide(data_dir: Path, model: str, const: list):
 
 
 class StatsRunner:
-    def __init__(self, data_dir: Path, const: list):
+    def __init__(self, data_dir: Path, const: list = None):
         self.data_dir = data_dir
         self.const = const
         os.makedirs(self.data_dir / "stats", exist_ok=True)
@@ -173,21 +173,29 @@ class StatsRunner:
             "extreme stats",
             model,
         )
-        df_tides = self.load_or_generate(
-            tide_stat_file,
-            run_stats_tide,
-            "tidal stats",
-            model,
-            const=self.const,
-        )
 
         df_general = assign_oceans(df_general)
         df_extreme = assign_oceans(df_extreme)
-        return df_general, df_extreme, df_tides
+
+        if self.const:
+            df_tides = self.load_or_generate(
+                tide_stat_file,
+                run_stats_tide,
+                "tidal stats",
+                model,
+                const=self.const,
+            )
+            return df_general, df_extreme, df_tides
+        else:
+            return df_general, df_extreme, pd.DataFrame()
 
 
 @pn.cache
-def get_stats(data_dir, const: list, model=None) -> dict[str, tuple[pd.DataFrame]]:
+def get_stats(
+    data_dir,
+    const: list = None,
+    model=None,
+) -> dict[str, tuple[pd.DataFrame]]:
     runner = StatsRunner(Path(data_dir), const)
 
     if model:

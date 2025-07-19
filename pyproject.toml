@@ -33,3 +33,4 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.5"
 ipympl = "^0.9.7"
+pytest = "^8.4.1"
