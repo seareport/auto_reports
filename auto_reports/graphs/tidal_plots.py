@@ -204,7 +204,7 @@ def empty_plot_comparative_amplitudes(param: str, cmap: dict):
         ylabel=return_ylabel(param),
         xlabel="Tidal Constituent",
         grid=True,
-        title=f"Tidal {return_ylabel(param)}: Model vs Obs vs FES",
+        title=f"Tidal {return_ylabel(param)}: Model vs Obs",
         legend="top_right",
         rot=90,
     ).opts(

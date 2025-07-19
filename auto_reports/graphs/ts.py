@@ -264,7 +264,7 @@ def empty_time_series_plot(
     end_date: pd.Timestamp,
 ):
     dates = pd.date_range(start_date, end_date, freq=pd.Timedelta("20min"))
-    df_empty = pd.DataFrame(index=dates, columns=["sim", "obs", "fes"])
+    df_empty = pd.DataFrame(index=dates, columns=["sim", "obs"])
     df_empty = df_empty.astype(float)
 
     return df_empty.hvplot(
