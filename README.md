@@ -26,10 +26,10 @@ This package purpose is to generate **static** HTML pages used for the dissemina
   - Export all tabs to a single PDF file.
   - Save interactive dashboard as standalone HTML.
 
-### Historical Storm Eventscomparison
+### Historical Storm Events comparison
 <img width="1568" height="794" alt="image" src="https://github.com/user-attachments/assets/e9dfcc12-0717-48f5-9b51-ee0fce1c5f02" />
 
-### Tidal Dashboard 
+### Tidal Dashboard
 <img width="1908" height="1054" alt="image" src="https://github.com/user-attachments/assets/8f83ca81-d990-4688-8906-f17c46214a55" />
 
 
@@ -67,8 +67,7 @@ follow the directory structure below:
 
 ```bash
 .
-├── app.py            # app launching the dashboard
-├── regional_dashboard.py # Main dashboard example
+├── app.py            # Example app for launching the dashboard
 ├── auto_reports/     # Core functions
 │ ├── _io.py          # Data loading and preprocessing
 │ ├── _stats.py       # Statistical computations
@@ -80,32 +79,37 @@ follow the directory structure below:
 │ │ ├── scatter.py    # Scatter plots for extreme values
 │ │ ├── taylor.py     # Taylor diagrams
 │ │ └── ts.py         # (Placeholder) TS visualizations
+├── dashboards
+│ ├── regional_dashboard.py
+│ ├── storms_dashboard.py
+│ └── tidal_dashboard.py
 ├── data/
 │ ├── html/, pdf/     # Temp folders for PDF exports
 │ ├── images/         # Folder for images contined in reports
-│ │   └── *.png
+│ │ └── *.png
 │ ├── meshes/         # Folder containing "{model}.gr3" meshes
-│ │   ├── seareport-v3.2.gr3
-│ │   └── stofs2d.gr3
+│ │ ├── seareport-v3.2.gr3
+│ │ └── stofs2d.gr3
 │ ├── models/         # Folder containing "{model}/{station}.parquet" files
-│ │   ├── seareport-v3.2
-│ │   │   ├── benc.parquet
-│ │   │   ├── ...
-│ │   │   └── naha.parquet
-│ │   └── stofs2d
-│ │   │   ├── benc.parquet
-│ │   │   ├── ...
-│ │   │   └── naha.parquet
+│ │ ├── seareport-v3.2
+│ │ │ ├── benc.parquet
+│ │ │ ├── ...
+│ │ │ └── naha.parquet
+│ │ └── stofs2d
+│ │ │ ├── benc.parquet
+│ │ │ ├── ...
+│ │ │ └── naha.parquet
 │ ├── obs/            # Folder containing "{station}_{sensor}.parquet" observation files
-│ │   ├── benc.parquet
-│ │   ├── ...
-│ │   └── naha.parquet
+│ │ ├── benc.parquet
+│ │ ├── ...
+│ │ └── naha.parquet
 │ └── stats/          # Folder containing "{model}.parquet", "{model}_eva.parquet" stats computed in auto_report/_stats.py routine
-│     ├── seareport-v3.2_eva.parquet
-│     ├── seareport-v3.2.parquet
-│     ├── stofs2d_eva.parquet
-│     └── stofs2d.parquet│
-├── *.html, *.pdf # Exported reports
-├── pyproject.toml, poetry.lock # Project dependencies
-└── README.md # You're here!
+│ ├── seareport-v3.2_eva.parquet
+│ ├── seareport-v3.2.parquet
+│ ├── stofs2d_eva.parquet
+│ └── stofs2d.parquet│
+├── *.html            # Exported reports
+├── pyproject.toml    # Project dependencies
+├── poetry.lock       # Project dependencies
+└── README.md         # You're here!
 ```

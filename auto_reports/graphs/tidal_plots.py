@@ -85,8 +85,8 @@ FULL = [
     "MKS2",  # Short period (higher harmonics)
 ]
 
-START = np.datetime64("2022-01-01T00:00:00")
-END = np.datetime64("2022-04-01T00:00:00")
+START = np.datetime64("2024-10-01T00:00:00")
+END = np.datetime64("2024-12-31T00:00:00")
 STEP = np.timedelta64(20, "m")
 
 
