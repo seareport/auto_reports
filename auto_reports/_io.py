@@ -101,8 +101,14 @@ def load_data(path: Path) -> pd.Series:
     df = pd.read_parquet(path)
     if len(df.columns) == 1:
         column = df.columns[0]
-    else:
+    elif "elev" in df.columns:  # for seareport parquet with multiple columns
         column = "elev"
+    elif "zeta" in df.columns:
+        column = "zeta"
+    else:
+        raise ValueError(
+            f"could not find water level column in parquet file: {df.columns}",
+        )
     return df[column]
 
 
