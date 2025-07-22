@@ -1,11 +1,11 @@
-# Regional Model Performance Report
+# Model skill performance dashboards
 
 This package purpose is to generate **static** HTML pages used for the dissemination of model skill assessment reports of global surge models.
 
 ## Features
 
 ### Regional Statistics Dashboard
-![auto-report_20250616](https://github.com/user-attachments/assets/fe479755-25c7-4b9d-a9fd-56f1965e0549)
+![regional_dashboard](/thumbnails/global_metrics_twl.png)
 
 - **Multi-tab Dashboard**: Visual exploration by ocean region including info, mesh, and metric views.
 - **Key Metrics**:
@@ -27,10 +27,19 @@ This package purpose is to generate **static** HTML pages used for the dissemina
   - Save interactive dashboard as standalone HTML.
 
 ### Historical Storm Events comparison
-<img width="1568" height="794" alt="image" src="https://github.com/user-attachments/assets/e9dfcc12-0717-48f5-9b51-ee0fce1c5f02" />
+![storm_events](/thumbnails/storm_events_twl.png)
+**Visual Components**:
+  - Scatter plots for storm events over 2022-2024
+  - model vs obs scatter
+  - time series
 
 ### Tidal Dashboard
-<img width="1908" height="1054" alt="image" src="https://github.com/user-attachments/assets/8f83ca81-d990-4688-8906-f17c46214a55" />
+![tide_dashboard](/thumbnails/dashboard_tide.png)
+**Visual Components**:
+  - Comparitive histograms for main tide constituents
+  - Interactive map with callback to switch stations
+  - Model vs obs tidal time series
+  - Score indicator
 
 
 ## Getting Started
@@ -66,50 +75,40 @@ follow the directory structure below:
 ### Directory Structure
 
 ```bash
-.
-├── app.py            # Example app for launching the dashboard
-├── auto_reports/     # Core functions
-│ ├── _io.py          # Data loading and preprocessing
-│ ├── _stats.py       # Statistical computations
-│ ├── _render.py      # Plot style and layout settings
-│ ├── _markdown.py    # Markdown content for documentation
-│ ├── graphs/         # All visual components
-│ │ ├── histograms.py # Histogram visualizations
-│ │ ├── maps.py       # Bathymetry and region maps
-│ │ ├── scatter.py    # Scatter plots for extreme values
-│ │ ├── taylor.py     # Taylor diagrams
-│ │ └── ts.py         # (Placeholder) TS visualizations
-├── dashboards
-│ ├── regional_dashboard.py
-│ ├── storms_dashboard.py
-│ └── tidal_dashboard.py
-├── data/
-│ ├── html/, pdf/     # Temp folders for PDF exports
-│ ├── images/         # Folder for images contined in reports
-│ │ └── *.png
-│ ├── meshes/         # Folder containing "{model}.gr3" meshes
-│ │ ├── seareport-v3.2.gr3
-│ │ └── stofs2d.gr3
-│ ├── models/         # Folder containing "{model}/{station}.parquet" files
-│ │ ├── seareport-v3.2
-│ │ │ ├── benc.parquet
-│ │ │ ├── ...
-│ │ │ └── naha.parquet
-│ │ └── stofs2d
-│ │ │ ├── benc.parquet
-│ │ │ ├── ...
-│ │ │ └── naha.parquet
-│ ├── obs/            # Folder containing "{station}_{sensor}.parquet" observation files
-│ │ ├── benc.parquet
-│ │ ├── ...
-│ │ └── naha.parquet
-│ └── stats/          # Folder containing "{model}.parquet", "{model}_eva.parquet" stats computed in auto_report/_stats.py routine
-│ ├── seareport-v3.2_eva.parquet
-│ ├── seareport-v3.2.parquet
-│ ├── stofs2d_eva.parquet
-│ └── stofs2d.parquet│
-├── *.html            # Exported reports
-├── pyproject.toml    # Project dependencies
-├── poetry.lock       # Project dependencies
-└── README.md         # You're here!
+├── app.py                      # Example app for launching the dashboard
+├── auto_reports                # Core functions
+│   ├── graphs/                 # All visual components
+│   ├── _io.py                  # Data loading and preprocessing
+│   ├── _markdown.py            # Markdown content for documentation
+│   ├── _proj.py                # [Not used] spilhaus projected mesh maps
+│   ├── _render.py              # Plot style and layout settings
+│   ├── _stats.py               # Statistical computations
+│   ├── _storms.py              # Storms definition
+│   └── _tide.py                # (De)Tide functions
+├── dashboards                  # Thematic dashboards
+│   ├── regional_dashboard.py
+│   ├── storms_dashboard.py
+│   └── tidal_dashboard.py
+├── data_demo
+│   ├── models                  # Folder containing "{model}/{station}.parquet" files
+│   │   ├── ...
+│   │   └── stofs2d
+│   │       ├── ...
+│   │       └── naha.parquet
+│   ├── obs                     # Folder containing "{station}_{sensor}.parquet" observation files
+│   │   ├── ...
+│   │   └── naha_rad.parquet
+│   └── stats                   # Folder containing stats files used in dashboards
+│       ├── ...
+│       ├── stofs2d_eva.parquet
+│       ├── stofs2d.parquet
+│       └── stofs2d_tide.parquet
+├── LICENSE
+├── poetry.lock                 # Project dependencies
+├── pyproject.toml              # Project dependencies
+├── README.md                   # You're here
+└── thumbnails                  # Images for README and landing page
+    ├── dashboard_tide.png
+    ├── global_metrics_twl.png
+    └── storm_events_twl.png
 ```
