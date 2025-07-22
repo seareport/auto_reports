@@ -146,7 +146,7 @@ class TidalDashboard(param.Parameterized):
     def create_dashboard(self):
         plot_constituents = self.plot_tidal_graphs()
         self.dashboard = pn.template.MaterialTemplate(
-            title="Regional Statistics",
+            title="Tidal Dashboard",
             header_background="#007BFF",
             main=pn.Row(
                 plot_constituents,

@@ -80,7 +80,7 @@ def run_stats_ext(data_dir: Path, model: str):
             sim = load_data(model_dir / f"{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
-            ext_ = seastats.storms.match_extremes(sim_, obs_, quantile=0.995)
+            ext_ = seastats.storms.match_extremes(sim_, obs_, quantile=0.95)
             ext_["lon"] = float(info["lon"])
             ext_["lat"] = float(info["lat"])
             ext_["station"] = station

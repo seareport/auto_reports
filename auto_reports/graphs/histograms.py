@@ -11,7 +11,6 @@ METRICS_HISTO = {
     "rms": "Root Mean Square Error",
     "cr": "Correlation Coefficient",
     "bias": "Systematic Error (Bias)",
-    "kge": "Kling Gupta Efficiency",
     "lambda": "Lambda Index",
     "R1": "Error on Highest Peak",
     "R3": "Error on 3 Highest Peaks",
@@ -68,14 +67,14 @@ def hist_(src, z, z_name, g="ocean", map=None, type="box", **kwargs):
         colors = [map[ocean] for ocean in unique_oceans]
     else:
         df = src[[z]]
-    mean = src[z].mean()
+    median = src[z].median()
     if type == "violin":
         histo_ = hv.Violin(df, g, z).opts(
             violin_fill_color=g,
             cmap=map,
             invert_axes=True,
             ylim=range_,
-            title=f"{z_name}, mean value: {mean:.2f}",
+            title=f"{z_name}, median: {median:.2f}",
             ylabel=z_name,
         )
     elif type == "box":
@@ -85,7 +84,7 @@ def hist_(src, z, z_name, g="ocean", map=None, type="box", **kwargs):
             invert_axes=True,
             outlier_radius=0.0005,
             ylim=range_,
-            title=f"{z_name}, mean value: {mean:.2f}",
+            title=f"{z_name}, median: {median:.2f}",
             ylabel="",
         )
     else:
@@ -98,7 +97,7 @@ def hist_(src, z, z_name, g="ocean", map=None, type="box", **kwargs):
             color=colors,
         ).opts(
             hooks=[stacked_hist],
-            title=f"{z_name}, mean value: {mean:.2f}",
+            title=f"{z_name}, median: {median:.2f}",
             ylabel=z_name,
         )
     return pn.pane.HoloViews(
@@ -130,7 +129,7 @@ def create_spider_chart(df, region, metrics_histo, cmap):
     grid_levels = [0.2, 0.4, 0.6, 0.8, 1.0]  # 5 grid levels
 
     for m_name, m_label in zip(metrics_histo.keys(), metrics_histo.values()):
-        val = df[m_name].mean()
+        val = df[m_name].median()
         min_val, max_val = get_normalization_range(m_name)
 
         # Special handling for bias - use absolute value for normalization

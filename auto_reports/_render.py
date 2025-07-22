@@ -9,6 +9,10 @@ time_series = {
     "width": 800,
     "height": 500,
 }
+time_series_storm = {
+    "width": 800,
+    "height": 300,
+}
 
 progress = {
     "width": 300,
@@ -35,6 +39,11 @@ taylor_offset = {"margin": "0 0 0 0"}  # top right bottom left
 
 map_region = {
     "width": 500,
+    "height": 470,
+}
+
+map_storm = {
+    "width": 700,
     "height": 470,
 }
 
@@ -66,6 +75,11 @@ model_cross_selector = {
 scatter = {
     "width": 500,
     "height": 600,
+}
+
+scatter_ext = {
+    "width": 700,
+    "height": 500,
 }
 
 scale = 2
