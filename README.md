@@ -1,4 +1,4 @@
-# Regional Model Performance Report
+# Model skill performance dashboards
 
 This package purpose is to generate **static** HTML pages used for the dissemination of model skill assessment reports of global surge models.
 
