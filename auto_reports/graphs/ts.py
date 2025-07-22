@@ -7,6 +7,7 @@ import colorcet as cc
 import geoviews as gv
 import holoviews as hv
 import hvplot.pandas  # noqa: F401
+import numpy as np
 import pandas as pd
 import panel as pn
 from pyproj import Transformer
@@ -23,8 +24,7 @@ OPTS = dict(
     active_tools=["box_zoom"],
     line_width=1.5,
     line_alpha=0.8,
-    width=800,
-    height=300,
+    **rr.time_series_storm,
     # legend_position = "right"
 )
 
@@ -59,7 +59,7 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
         options=sorted_options,
     )
 
-    demean_checkbox = pn.widgets.Checkbox(name="Demean Obs", value=True)
+    demean_checkbox = pn.widgets.Checkbox(name="Correct local bias", value=True)
 
     selector_panel = pn.Column(
         pn.pane.Markdown(f"### Select from {len(models_all)} models"),
@@ -109,6 +109,7 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
                         data_dir / f"models/{model}/{station}.parquet",
                     ).loc[min_time:max_time]
                     for model in models
+                    if (data_dir / f"models/{model}/{station}.parquet").exists()
                 }
                 # plots
                 storm_peaks = extremes[models[0]]
@@ -119,14 +120,14 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
                     storm_peak.loc[:, "observed"] -= mean
 
                 curve = hv.Curve(obs, label="obs").opts(
-                    color="lightgrey",
+                    color="grey",
                     **OPTS,
                     title=station,
                 ) * storm_peak.hvplot.scatter(
                     x="time observed",
                     y="observed",
                     s=50,
-                    c="lightgrey",
+                    c="grey",
                     label="obs",
                 )
                 for i, (model, ts) in enumerate(sims.items()):
@@ -157,19 +158,91 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
             return layout
         else:
             return (
-                hv.Layout([hv.Curve((0, 0))])
+                hv.Layout(
+                    [
+                        hv.Curve((0, 0)).opts(
+                            **rr.time_series_storm,
+                        ),
+                    ],
+                )
                 .cols(1)
                 .opts(
                     title="No storm selected",
+                    shared_axes=False,
                 )
             )
+
+    @pn.depends(
+        storm_selector.param.value,
+        model_selector.param.value,
+    )
+    def scatter_storm_ext(storm, models):
+        if (storm) and (len(models) > 0):
+            df = extremes[models[0]]
+            df["is_active"] = df["storm"] == storm
+            df["alpha"] = df["is_active"].map({True: 1.0, False: 0.4})
+            df["size"] = df["is_active"].map({True: 50, False: 30})
+            main_plot = df.hvplot.scatter(
+                x="time observed",
+                y="observed",
+                c="storm",
+                size="size",
+                alpha="alpha",
+            )
+            return main_plot.opts(**rr.scatter_ext)
+        else:
+            return hv.Scatter((0, 0)).opts(
+                title="No storm selected",
+                **rr.scatter_ext,
+            )
+
+    @pn.depends(
+        storm_selector.param.value,
+        model_selector.param.value,
+    )
+    def scatter_model_ext(storm, models):
+        xy_axis = hv.Curve([(0, 0), (10, 10)]).opts(
+            color="k",
+            line_dash="dashed",
+        )
+        scatters = [xy_axis]
+        xmax = []
+        ymax = []
+        if (storm) and (len(models) > 0):
+            for i, model in enumerate(models):
+                df = extremes[model]
+                df = df[df["storm"] == storm]
+                xmax.append(df["observed"].max())
+                ymax.append(df["model"].max())
+                scatters.append(
+                    df.hvplot.scatter(
+                        x="observed",
+                        y="model",
+                        hover_cols="station",
+                        c=cc.glasbey_dark[i],
+                        label=model,
+                    ),
+                )
+            xymax = np.nanmax([*xmax, *ymax])
+            xymax *= 1.1
+            title = f"Storm - {storm}"
+        else:
+            scatters.append(hv.Scatter((0, 0)))
+            title = "No storm selected"
+            xymax = 1
+        return hv.Overlay(scatters).opts(
+            title=title,
+            **rr.scatter_ext,
+            xlim=(0, xymax),
+            ylim=(0, xymax),
+        )
 
     @pn.depends(storm_selector.param.value)
     def ts_map_hv(storm):
         df = extremes[models_all[0]]
         stats = all_stats[models_all[0]][0]
         if df.empty:
-            return gv.Points((0, 0)) * gv.Points((0, 0))
+            return (gv.Points((0, 0)) * gv.Points((0, 0))).opts(**rr.map_storm)
         points = stats.hvplot.points(
             x="lon",
             y="lat",
@@ -200,15 +273,15 @@ def plot_ts(models_all, all_stats, region, cmap, data_dir):
         )
         x0, y0 = transformer.transform(xmin, ymin)
         x1, y1 = transformer.transform(xmax, ymax)
-        return (points * map_hv).opts(xlim=(x0, x1), ylim=(y0, y1), **rr.map_region)
+        return (points * map_hv).opts(xlim=(x0, x1), ylim=(y0, y1), **rr.map_storm)
 
     return pn.Row(
         pn.Column(
             pn.Row(toggle_btn, demean_checkbox),
             selector_panel,
         ),
-        pn.panel(ts_panel),
-        pn.panel(ts_map_hv),
+        pn.Column(ts_map_hv, scatter_storm_ext, scatter_model_ext),
+        ts_panel,
     )
 
 

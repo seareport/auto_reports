@@ -73,7 +73,7 @@ class StormDashboard(param.Parameterized):
 
     def create_dashboard(self):
         self.dashboard = pn.template.MaterialTemplate(
-            title="Regional Statistics",
+            title="Storm Events",
             header_background="#007BFF",
             main=pn.Column(
                 pn.Row(
