@@ -85,16 +85,30 @@ FULL = [
     "MKS2",  # Short period (higher harmonics)
 ]
 
-START = np.datetime64("2024-10-01T00:00:00")
-END = np.datetime64("2024-12-31T00:00:00")
-STEP = np.timedelta64(20, "m")
 
-
-def return_ylabel(param):
+def ylabel(param):
     if param == "amplitude":
         return "Amplitude [m]"
     elif param == "phase":
         return "Phase (°)"
+    else:
+        raise ValueError(f"{param} not in ['amplitude', 'phase']")
+
+
+def viewsize(param):
+    if param == "amplitude":
+        return rr.tidal_barchart_amplitude
+    elif param == "phase":
+        return rr.tidal_barchart_phase
+    else:
+        raise ValueError(f"param {param} not recognised")
+
+
+def rss_label(param, rss):
+    if param == "amplitude":
+        return f"rss={rss:.2f}"
+    elif param == "phase":
+        return ""
     else:
         raise ValueError(f"{param} not in ['amplitude', 'phase']")
 
@@ -123,27 +137,28 @@ def plot_comparative_amplitudes(
     return (
         df_ordered[param]
         .hvplot.barh(
-            ylabel=return_ylabel(param),
+            ylabel=ylabel(param),
             xlabel="Tidal Constituent",
             grid=True,
-            title=f"Tidal {return_ylabel(param)}: Model vs Obs. rss={rss:.2f}",
+            title=f"Tidal {ylabel(param)}: Model vs Obs. {rss_label(param,rss)}",
             legend="top_right",
             rot=90,
         )
         .opts(
-            **rr.tidal_barchart_absolute,
+            **viewsize(param),
             fontsize={"title": 13, "labels": 12, "xticks": 8, "yticks": 8},
             cmap=cmap,
             line_color=None,
             show_legend=True,
             bar_width=0.8,
+            default_tools=["pan"],
         )
     )
 
 
 def plot_relative_amplitudes(df: pd.DataFrame, param: str, const: list):
     df_ = df[param].unstack(level="method")
-    df_["relative_difference"] = (df_["sim"] - df_["obs"]) * 100
+    df_["relative_difference"] = df_["sim"] - df_["obs"]
     df_["category"] = df_.index.map(constituent_to_category).fillna("Other")
     df_["label"] = df_["category"] + "\n" + df_.index
 
@@ -154,15 +169,16 @@ def plot_relative_amplitudes(df: pd.DataFrame, param: str, const: list):
     return df_.hvplot.barh(
         y="relative_difference",
         x="label",
-        ylabel=return_ylabel(param),
+        ylabel=ylabel(param),
         xlabel="Tidal Constituent",
         grid=True,
-        title=f"Error (sim - obs) in {return_ylabel(param)}",
+        title=f"Error (sim - obs) in {ylabel(param)}",
         color="relative_difference",
         cmap="coolwarm",
         legend=False,
     ).opts(
         **rr.tidal_barchart_relative,
+        default_tools=["pan"],
         fontsize={"title": 13, "labels": 12, "xticks": 8, "yticks": 8},
     )
 
@@ -177,15 +193,16 @@ def empty_plot_relative_amplitudes(param: str):
     return df_empty.hvplot.barh(
         y="relative_difference",
         x="label",
-        ylabel=return_ylabel(param),
+        ylabel=ylabel(param),
         xlabel="Tidal Constituent",
         grid=True,
-        title=f"Error (sim - obs) in {return_ylabel(param)}",
+        title=f"Error (sim - obs) in {ylabel(param)}",
         color="relative_difference",
         cmap="coolwarm",
         legend=False,
     ).opts(
         **rr.tidal_barchart_relative,
+        default_tools=["pan"],
         fontsize={"title": 13, "labels": 12, "xticks": 8, "yticks": 8},
     )
 
@@ -201,17 +218,18 @@ def empty_plot_comparative_amplitudes(param: str, cmap: dict):
     df_empty[param] = np.nan
 
     return df_empty.hvplot.barh(
-        ylabel=return_ylabel(param),
+        ylabel=ylabel(param),
         xlabel="Tidal Constituent",
         grid=True,
-        title=f"Tidal {return_ylabel(param)}: Model vs Obs",
+        title=f"Tidal {ylabel(param)}: Model vs Obs",
         legend="top_right",
         rot=90,
     ).opts(
-        **rr.tidal_barchart_absolute,
+        **viewsize(param),
         fontsize={"title": 13, "labels": 12, "xticks": 8, "yticks": 8},
         cmap=cmap,
         line_color=None,
         show_legend=True,
+        default_tools=["pan"],
         bar_width=0.8,
     )

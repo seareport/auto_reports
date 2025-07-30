@@ -16,7 +16,7 @@ $$
 
 Where:
 
-- **corr** is the Pearson correlation coefficient between model and observed data (ranges from 0 to 1).
+- **corr** is the Pearson corr. coefficient between model and observed data.
 - **rss** is the residual sum of squares, of tidal consituents amplitudes.
 """
 

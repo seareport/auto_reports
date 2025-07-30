@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import glob
 import logging
+from datetime import date
+from datetime import timedelta
 
 import holoviews as hv
+import pandas as pd
 import panel as pn
 import param
 
@@ -20,12 +23,10 @@ from auto_reports.graphs.maps import tide_map
 from auto_reports.graphs.progress import progress_wheel
 from auto_reports.graphs.tidal_plots import empty_plot_comparative_amplitudes
 from auto_reports.graphs.tidal_plots import empty_plot_relative_amplitudes
-from auto_reports.graphs.tidal_plots import END
 from auto_reports.graphs.tidal_plots import FULL
 from auto_reports.graphs.tidal_plots import plot_comparative_amplitudes
 from auto_reports.graphs.tidal_plots import plot_relative_amplitudes
 from auto_reports.graphs.tidal_plots import SHORT
-from auto_reports.graphs.tidal_plots import START
 from auto_reports.graphs.ts import empty_time_series_plot
 from auto_reports.graphs.ts import generate_tide_ts
 
@@ -41,6 +42,16 @@ CMAP = {
 
 SHORT_LIST = SHORT
 FULL_LIST = FULL
+
+DEFAULT_START = date(2024, 6, 1)
+DEFAULT_END = DEFAULT_START + timedelta(days=180)
+
+date_picker = pn.widgets.DatePicker(
+    name="Date Start",
+    start=date(2022, 1, 1),
+    end=date(2024, 6, 1),
+    value=DEFAULT_START,
+)
 
 
 class TidalDashboard(param.Parameterized):
@@ -66,80 +77,106 @@ class TidalDashboard(param.Parameterized):
             value=self.model,
             options=self.models,
         )
-        tidal_param_selector = pn.widgets.Select(
-            name="Parameter",
-            value="amplitude",
-            options=["amplitude", "phase"],
-        )
 
-        @pn.depends(
-            tidal_param_selector.param.value,
-            model_selector.param.value,
-        )
-        def tide_panel(param, model):
+        @pn.depends(model_selector.param.value)
+        def tide_panel(model):
             models_dir = get_models_dir(self.data_dir) / model
             obs_dir = get_obs_dir(self.data_dir)
             self.update_tidal_df(model)
             tide_map_ = tide_map(self.tidal_reduced).opts(**rr.tide_map)
+            station_panel = pn.Column()
+            # Define the progress wheel placeholder and dynamic content
+            score_wheel_pane = pn.pane.Bokeh(
+                sizing_mode="fixed",
+                **rr.progress,
+                styles=rr.histo_offset,
+            )
+            score_md_pane = pn.pane.Markdown(md.SCORE_MD)
+            ts_panel = pn.Column()
+            selected_station = {"value": None}
+            corr_sim = {"value": 0}
 
-            def update_station_from_map(index):
+            def update_ts_plot(station, start):
+                end = start + pd.Timedelta(days=180)
+                if station is None:
+                    ts_plot = empty_time_series_plot(start, end)
+                else:
+                    sim = load_data(models_dir / f"{station}.parquet")
+                    obs_file = glob.glob(f"{str(obs_dir)}/{station}_*.parquet")[0]
+                    obs = load_data(obs_file)
+                    ts_plot, corr = generate_tide_ts(obs, sim, start, end, cmap=CMAP)
+                    corr_sim["value"] = corr
+                ts_panel[:] = [ts_plot]
+
+            def update_station(index):
                 if index:
                     # histogram part
                     station = self.tidal_reduced.iloc[index].station.values[0]
+                    selected_station["value"] = station  # track current station
                     df = self.tidal_df[self.tidal_df.station == station]
-                    rss_sim = compute_rss(df, param, "sim", "obs")
-                    plot_relative = plot_relative_amplitudes(df, param, SHORT_LIST)
-                    plot_comparison = plot_comparative_amplitudes(
+                    rss_sim = compute_rss(df, "amplitude", "sim", "obs")
+                    plot_relative = plot_relative_amplitudes(
                         df,
-                        param,
+                        "amplitude",
+                        SHORT_LIST,
+                    )
+                    plot_comparison_amp = plot_comparative_amplitudes(
+                        df,
+                        "amplitude",
                         rss_sim,
                         CMAP,
                         SHORT_LIST,
                     )
-
-                    # ts plot part
-                    sim = load_data(models_dir / f"{station}.parquet")
-                    obs_file = glob.glob(f"{str(obs_dir)}/{station}_*.parquet")[0]
-                    obs = load_data(obs_file)
-                    ts_plot, corr_sim = generate_tide_ts(
-                        obs,
-                        sim,
-                        START,
-                        END,
+                    plot_comparison_phase = plot_comparative_amplitudes(
+                        df,
+                        "phase",
+                        0,
                         CMAP,
+                        SHORT_LIST,
                     )
 
-                    score_sim = compute_score(corr_sim, float(rss_sim))
+                    update_ts_plot(station, date_picker.value)
+
+                    score_sim = compute_score(corr_sim["value"], float(rss_sim))
                 else:
                     score_sim = 0
-                    plot_relative = empty_plot_relative_amplitudes(param)
-                    plot_comparison = empty_plot_comparative_amplitudes(param, CMAP)
-                    ts_plot = empty_time_series_plot(START, END)
+                    plot_relative = empty_plot_relative_amplitudes("amplitude")
+                    plot_comparison_amp = empty_plot_comparative_amplitudes(
+                        "amplitude",
+                        CMAP,
+                    )
+                    plot_comparison_phase = empty_plot_comparative_amplitudes(
+                        "phase",
+                        CMAP,
+                    )
+                    update_ts_plot(None, date_picker.value)
 
-                return pn.Column(
-                    pn.Row(plot_comparison, plot_relative),
-                    pn.Row(
-                        ts_plot,
-                        pn.Column(
-                            pn.pane.Bokeh(
-                                progress_wheel(score_sim, CMAP),
-                                **rr.progress,
-                                styles=rr.histo_offset,
-                                sizing_mode="fixed",
-                            ),
-                            pn.pane.Markdown(md.SCORE_MD),
-                        ),
-                    ),
-                )
+                score_wheel_pane.object = progress_wheel(score_sim, CMAP)
+                station_panel[:] = [
+                    pn.Row(plot_relative, plot_comparison_amp, plot_comparison_phase),
+                    ts_panel,
+                ]
 
             selection = hv.streams.Selection1D(source=tide_map_)
+            selection.param.watch(lambda e: update_station(e.new), "index")
+
+            def on_date_change(event):
+                update_ts_plot(selected_station["value"], event.new)
+
+            date_picker.param.watch(on_date_change, "value")
+
+            update_station([])
+
             return pn.Row(
-                tide_map_,
-                pn.bind(update_station_from_map, index=selection.param.index),
+                pn.Column(
+                    tide_map_,
+                    pn.Row(score_wheel_pane, score_md_pane),
+                ),
+                station_panel,
             )
 
         return pn.Column(
-            pn.Row(model_selector, tidal_param_selector),
+            pn.Row(model_selector, date_picker),
             pn.panel(tide_panel),
         )
 

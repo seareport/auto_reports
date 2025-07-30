@@ -22,11 +22,12 @@ from auto_reports._tide import concat_tides_constituents
 from auto_reports._tide import pytide_get_coefs
 from auto_reports._tide import pytides_to_df
 from auto_reports._tide import reduce_coef_to_fes
-from auto_reports.graphs.tidal_plots import END
-from auto_reports.graphs.tidal_plots import START
+from auto_reports._tide import utide_get_coefs
+from auto_reports._tide import utide_to_df
 
 logger = logging.getLogger(name="auto-report")
 CLUSTER_DURATION = 72
+RESAMPLE_MIN = 20
 
 
 def sim_on_obs(sim, obs):
@@ -100,20 +101,24 @@ def run_stats_tide(data_dir: Path, model: str, const: list):
             obs = load_data(obs_dir / f"{station_sensor}.parquet")
             sim = load_data(model_dir / f"{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
-            out_pytides_sim = pytide_get_coefs(sim, 20)
-            out_pytides_obs = pytide_get_coefs(obs, 20)
-            pytides_reduced_coef_sim = reduce_coef_to_fes(
-                pytides_to_df(out_pytides_sim),
-                cnst=const,
-            )
-            pytides_reduced_coef_obs = reduce_coef_to_fes(
-                pytides_to_df(out_pytides_obs),
-                cnst=const,
-            )
+            try:
+                out_coef_sim = pytides_to_df(pytide_get_coefs(sim, RESAMPLE_MIN))
+                out_coef_obs = pytides_to_df(pytide_get_coefs(obs, RESAMPLE_MIN))
+            except ValueError as e:
+                logger.warning(f"pytides failed.. trying with utide.. error: {e}")
+                out_coef_sim = utide_to_df(
+                    utide_get_coefs(sim, float(info["lat"]), RESAMPLE_MIN),
+                )
+                out_coef_obs = utide_to_df(
+                    utide_get_coefs(obs, float(info["lat"]), RESAMPLE_MIN),
+                )
+
+            reduced_coef_sim = reduce_coef_to_fes(out_coef_sim, cnst=const)
+            reduced_coef_obs = reduce_coef_to_fes(out_coef_obs, cnst=const)
             tide_ = concat_tides_constituents(
                 {
-                    "sim": pytides_reduced_coef_sim,
-                    "obs": pytides_reduced_coef_obs,
+                    "sim": reduced_coef_sim,
+                    "obs": reduced_coef_obs,
                 },
             )
             tide_["station"] = station
@@ -122,12 +127,11 @@ def run_stats_tide(data_dir: Path, model: str, const: list):
             tide_["station"] = station
             rss_sim = compute_rss(tide_, "amplitude", "sim", "obs")
 
-            # compute stats on TS for the 3 first months of pure tidal signal
-            ts_sim_obs, _ = sim_on_obs(sim.loc[START:END], obs.loc[START:END])
+            ts_sim_obs, _ = sim_on_obs(sim, obs)
             df_sim_obs = pd.concat(
                 {
                     "sim": ts_sim_obs,
-                    "obs": obs.loc[START:END],
+                    "obs": obs,
                 },
                 axis=1,
             )

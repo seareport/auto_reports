@@ -297,25 +297,31 @@ def generate_tide_ts(
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
     cmap: dict,
-) -> T.Tuple[hv.Curve, float, float]:
-    ts_sim_obs, _ = sim_on_obs(
-        sim.loc[start_date:end_date],
-        obs.loc[start_date:end_date],
-    )
-
-    df_sim_obs = pd.concat(
+) -> T.Tuple[hv.Curve, float]:
+    obs = obs.drop_duplicates()
+    sim = sim.drop_duplicates()
+    ts_sim_obs, _ = sim_on_obs(sim, obs)
+    df_sim_obs_corr = pd.concat(
         {
             "sim": ts_sim_obs,
+            "obs": obs,
+        },
+        axis=1,
+    )
+
+    df_sim_obs_plot = pd.concat(
+        {
+            "sim": sim.loc[start_date:end_date],
             "obs": obs.loc[start_date:end_date],
         },
         axis=1,
     )
 
-    corr_matrix = df_sim_obs.corr(method="pearson")
+    corr_matrix = df_sim_obs_corr.corr(method="pearson")
     corr_sim = corr_matrix.loc["sim", "obs"]
 
     ts_plot = (
-        df_sim_obs.resample("20min")
+        df_sim_obs_plot.resample("20min")
         .mean()
         .shift(freq="10min")
         .hvplot(
@@ -325,7 +331,7 @@ def generate_tide_ts(
             title=f"Model vs Obs - corr={corr_sim:.2f}",
             line_width=1.5,
             color=list(cmap.values()),
-            **rr.time_series,
+            **rr.time_series_tide,
         )
     )
 
@@ -349,5 +355,5 @@ def empty_time_series_plot(
         height=300,
         line_width=2,
     ).opts(
-        **rr.time_series,
+        **rr.time_series_tide,
     )

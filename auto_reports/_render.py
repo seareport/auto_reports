@@ -9,6 +9,11 @@ time_series = {
     "width": 800,
     "height": 500,
 }
+
+time_series_tide = {
+    "width": 1200,
+    "height": 500,
+}
 time_series_storm = {
     "width": 800,
     "height": 300,
@@ -21,12 +26,16 @@ progress = {
 
 tidal_barchart_relative = {
     "height": 600,
-    "width": 400,
+    "width": 380,
 }
 
-tidal_barchart_absolute = {
+tidal_barchart_amplitude = {
     "height": 600,
-    "width": 600,
+    "width": 450,
+}
+tidal_barchart_phase = {
+    "height": 600,
+    "width": 340,
 }
 
 histo_offset = {"margin": "0 0 0 0"}  # top right bottom left
@@ -49,7 +58,7 @@ map_storm = {
 
 tide_map = {
     "width": 800,
-    "height": 900,
+    "height": 700,
 }
 
 radar = {

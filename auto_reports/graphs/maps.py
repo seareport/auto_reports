@@ -168,13 +168,15 @@ def tide_map(df):
         y="lat",
         geo=True,
         c="score",
-        line_color="k",
+        line_color="w",
         cmap="rainbow4_r",
         size=200,
-        tiles="CartoLight",
+        tiles="EsriImagery",
         hover_cols=["station", "score", "corr", "rss"],
         title="Simulation Score by Station",
         tools=["tap"],
-        nonselection_alpha=0.6,
+        selection_line_color="k",
+        selection_line_width=2,
+        nonselection_alpha=0.7,
     )
     return station_points
