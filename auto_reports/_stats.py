@@ -91,7 +91,7 @@ def run_stats_ext(data_dir: Path, model: str):
     return extreme_events
 
 
-def run_stats_tide(data_dir: Path, model: str, const: list):
+def run_stats_tide(data_dir: Path, model: str, const: list, analysis: str = "pytides"):
     tide_all = pd.DataFrame()
     obs_dir = get_obs_dir(data_dir)
     model_dir = get_models_dir(data_dir) / model
@@ -101,17 +101,18 @@ def run_stats_tide(data_dir: Path, model: str, const: list):
             obs = load_data(obs_dir / f"{station_sensor}.parquet")
             sim = load_data(model_dir / f"{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
-            try:
+            if analysis == "pytides":
                 out_coef_sim = pytides_to_df(pytide_get_coefs(sim, RESAMPLE_MIN))
                 out_coef_obs = pytides_to_df(pytide_get_coefs(obs, RESAMPLE_MIN))
-            except ValueError as e:
-                logger.warning(f"pytides failed.. trying with utide.. error: {e}")
+            elif analysis == "utide":
                 out_coef_sim = utide_to_df(
                     utide_get_coefs(sim, float(info["lat"]), RESAMPLE_MIN),
                 )
                 out_coef_obs = utide_to_df(
                     utide_get_coefs(obs, float(info["lat"]), RESAMPLE_MIN),
                 )
+            else:
+                raise ValueError(f"Analysis not recognised {analysis}")
 
             reduced_coef_sim = reduce_coef_to_fes(out_coef_sim, cnst=const)
             reduced_coef_obs = reduce_coef_to_fes(out_coef_obs, cnst=const)
@@ -149,9 +150,10 @@ def run_stats_tide(data_dir: Path, model: str, const: list):
 
 
 class StatsRunner:
-    def __init__(self, data_dir: Path, const: list = None):
+    def __init__(self, data_dir: Path, const: list = None, analysis: str = "pytides"):
         self.data_dir = data_dir
         self.const = const
+        self.analysis = analysis
         os.makedirs(self.data_dir / "stats", exist_ok=True)
 
     def load_or_generate(self, file_path, stats_func, file_name, model, **kwargs):
@@ -188,6 +190,7 @@ class StatsRunner:
                 "tidal stats",
                 model,
                 const=self.const,
+                analysis=self.analysis,
             )
             return df_general, df_extreme, df_tides
         else:
@@ -199,8 +202,9 @@ def get_stats(
     data_dir,
     const: list = None,
     model=None,
+    tide_analysis: str = "pytides",
 ) -> dict[str, tuple[pd.DataFrame]]:
-    runner = StatsRunner(Path(data_dir), const)
+    runner = StatsRunner(Path(data_dir), const, tide_analysis)
 
     if model:
         models = [model]
