@@ -53,12 +53,14 @@ date_picker = pn.widgets.DatePicker(
     value=DEFAULT_START,
 )
 
+TIDE_ANALYSIS = "utide"  # or "pytides"
+
 
 class TidalDashboard(param.Parameterized):
     def __init__(self, data_dir="data", **params):
         super().__init__(**params)
         self.data_dir = get_data_dir(data_dir)
-        self.all_stats = get_stats(self.data_dir, FULL_LIST)
+        self.all_stats = get_stats(self.data_dir, FULL_LIST, TIDE_ANALYSIS)
         self.models = sorted(self.all_stats.keys())
         self.tide_stats = {model: self.all_stats[model][2] for model in self.models}
         self.model = self.models[0]
