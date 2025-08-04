@@ -79,13 +79,18 @@ class TidalDashboard(param.Parameterized):
             value=self.model,
             options=self.models,
         )
+        metric_selector = pn.widgets.Select(
+            name="Metric",
+            value="rss",
+            options=["rss", "corr", "score"],
+        )
 
-        @pn.depends(model_selector.param.value)
-        def tide_panel(model):
+        @pn.depends(model_selector.param.value, metric_selector.param.value)
+        def tide_panel(model, metric):
             models_dir = get_models_dir(self.data_dir) / model
             obs_dir = get_obs_dir(self.data_dir)
             self.update_tidal_df(model)
-            tide_map_ = tide_map(self.tidal_reduced).opts(**rr.tide_map)
+            tide_map_ = tide_map(self.tidal_reduced, metric).opts(**rr.tide_map)
             station_panel = pn.Column()
             # Define the progress wheel placeholder and dynamic content
             score_wheel_pane = pn.pane.Bokeh(
@@ -178,7 +183,7 @@ class TidalDashboard(param.Parameterized):
             )
 
         return pn.Column(
-            pn.Row(model_selector, date_picker),
+            pn.Row(model_selector, metric_selector, date_picker),
             pn.panel(tide_panel),
         )
 

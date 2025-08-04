@@ -201,8 +201,8 @@ class StatsRunner:
 def get_stats(
     data_dir,
     const: list = None,
-    model=None,
     tide_analysis: str = "pytides",
+    model=None,
 ) -> dict[str, tuple[pd.DataFrame]]:
     runner = StatsRunner(Path(data_dir), const, tide_analysis)
 

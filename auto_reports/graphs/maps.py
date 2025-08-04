@@ -162,14 +162,26 @@ def map_gv(stats, cmap, ocean_or_sector, region):
 
 
 # tide map
-def tide_map(df):
+def tide_map(df, metric):
+    print(metric)
+    print(metric == "rss")
+    if metric == "rss":
+        clim = (0, 1)
+        cmap = "rainbow4"
+    elif metric == "score":
+        clim = (0, 1)
+        cmap = "rainbow4_r"
+    else:
+        clim = (-1, 1)
+        cmap = "rainbow4_r"
     station_points = df.hvplot.points(
         x="lon",
         y="lat",
         geo=True,
-        c="score",
+        c=metric,
         line_color="w",
-        cmap="rainbow4_r",
+        clim=clim,
+        cmap=cmap,
         size=200,
         tiles="EsriImagery",
         hover_cols=["station", "score", "corr", "rss"],
