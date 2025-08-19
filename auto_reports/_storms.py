@@ -304,8 +304,8 @@ STORMS = {
 }
 
 THRESHOLDS = {
-    "Atlantic NE": 1.6,
-    "Mediterranean": 0.7,
+    "Atlantic NE": 1.2,  # 1.6
+    "Mediterranean": 0.4,  # 0.7
     "Atlantic NW": 0.8,
     "Caribbean": 0.3,
     "Pacific NE": 0.6,
