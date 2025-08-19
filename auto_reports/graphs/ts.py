@@ -301,6 +301,9 @@ def generate_tide_ts(
     obs = obs.drop_duplicates()
     sim = sim.drop_duplicates()
     ts_sim_obs, _ = sim_on_obs(sim, obs)
+    ts_sim_obs = ts_sim_obs[~ts_sim_obs.index.duplicated(keep="first")]
+    sim = sim[~sim.index.duplicated(keep="first")]
+    obs = obs[~obs.index.duplicated(keep="first")]
     df_sim_obs_corr = pd.concat(
         {
             "sim": ts_sim_obs,
