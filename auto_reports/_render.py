@@ -16,7 +16,7 @@ time_series_tide = {
 }
 time_series_storm = {
     "width": 800,
-    "height": 300,
+    "height": 500,
 }
 
 progress = {

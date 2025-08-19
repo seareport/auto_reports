@@ -10,12 +10,15 @@ import panel as pn
 from matplotlib.colorbar import ColorbarBase
 from matplotlib.colors import BoundaryNorm
 from matplotlib.colors import LinearSegmentedColormap
+from pyproj import Transformer
 
 import auto_reports._render as rr
 from auto_reports._io import load_countries
 from auto_reports._io import load_world_oceans
 from auto_reports._io import parse_hgrid
 from auto_reports._proj import wgs84_to_spilhaus
+
+transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
 
 
 def custom_div_cmap(
@@ -161,12 +164,40 @@ def map_gv(stats, cmap, ocean_or_sector, region):
     )
 
 
+# storm map
+def storm_map(df, cmap, region):
+    if df.empty:
+        return (gv.Points((0, 0)) * gv.Points((0, 0))).opts(**rr.map_storm)
+    # points = stats.hvplot.points(
+    #     x="lon",
+    #     y="lat",
+    #     geo=True,
+    #     tiles="OSM",
+    #     hover_cols=["station"],
+    #     c="r",
+    #     line_color="k",
+    #     size=20,
+    # )
+    map_hv = df.hvplot.points(
+        x="lon",
+        y="lat",
+        geo=True,
+        tiles="OSM",
+        c=cmap[region],
+        hover_cols=["station"],
+        tools=["tap"],
+        active_tools=["tap"],
+        s=200,
+        nonselection_alpha=0.5,
+        line_color="k",
+    )
+    return map_hv.opts(**rr.map_storm)
+
+
 # tide map
 def tide_map(df, metric):
-    print(metric)
-    print(metric == "rss")
     if metric == "rss":
-        clim = (0, 1)
+        clim = (0, 0.3)
         cmap = "rainbow4"
     elif metric == "score":
         clim = (0, 1)
