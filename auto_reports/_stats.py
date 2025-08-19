@@ -52,13 +52,21 @@ def run_stats(data_dir: Path, model: str):
             sim = load_data(model_dir / f"{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
+            tmax = min(sim_.index.max(), obs_.index.max())
+            tmin = max(sim_.index.min(), obs_.index.min())
+            obs_ = obs_.loc[tmin:tmax]
+            sim_ = sim_.loc[tmin:tmax]
             normal_stats = seastats.get_stats(sim_, obs, seastats.GENERAL_METRICS_ALL)
-            storm_stats = seastats.get_stats(
-                sim_,
-                obs_,
-                seastats.STORM_METRICS,
-                quantile=0.995,
-            )
+            try:
+                storm_stats = seastats.get_stats(
+                    sim_,
+                    obs_,
+                    seastats.STORM_METRICS,
+                    quantile=0.995,
+                )
+            except IndexError as e:
+                logger.warning(f"[WARNING] {e}")
+                storm_stats = {m: None for m in seastats.STORM_METRICS}
             stats[station] = {**normal_stats, **storm_stats}
             stats[station]["lon"] = float(info["lon"])
             stats[station]["lat"] = float(info["lat"])
