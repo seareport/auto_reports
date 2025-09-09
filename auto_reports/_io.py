@@ -96,8 +96,20 @@ def get_observation_metadata(data_dir: str | Path) -> pd.DataFrame:
     return df
 
 
+def find_file(dir: Path, pattern: str) -> Path | None:
+    matches = list(dir.glob(pattern))
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 @pn.cache
-def load_data(path: Path) -> pd.Series:
+def load_data(dir: Path, pattern: str) -> pd.Series:
+    path = find_file(dir, pattern)
+    if path is None:
+        raise FileNotFoundError(
+            f"No (or too many) file(s) matching '{pattern}' in {dir}",
+        )
     df = pd.read_parquet(path)
     if len(df.columns) == 1:
         column = df.columns[0]
