@@ -12,6 +12,7 @@ import param
 
 import auto_reports._render as rr
 from auto_reports._io import assign_storms
+from auto_reports._io import find_file
 from auto_reports._io import get_data_dir
 from auto_reports._io import get_obs_dir
 from auto_reports._io import load_data
@@ -142,12 +143,14 @@ class StormDashboard(param.Parameterized):
                     max_time = min(pd.Timestamp(2024, 12, 31, 23), max_time)
                     sims = {
                         model: load_data(
-                            self.data_dir / f"models/{model}/{station}.parquet",
+                            self.data_dir,
+                            f"models/{model}/*{station}.parquet",
                         ).loc[min_time:max_time]
                         for model in models
-                        if (
-                            self.data_dir / f"models/{model}/{station}.parquet"
-                        ).exists()
+                        if find_file(
+                            self.data_dir,
+                            f"models/{model}/*{station}.parquet",
+                        )
                     }
                     obs_file = glob.glob(f"{self.obs_dir}/{station}*.parquet")[0]
                     obs = load_data(obs_file)

@@ -48,8 +48,8 @@ def run_stats(data_dir: Path, model: str):
     for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = station_sensor.split("_")
         try:
-            obs = load_data(obs_dir / f"{station_sensor}.parquet")
-            sim = load_data(model_dir / f"{station}.parquet")
+            obs = load_data(obs_dir, f"{station_sensor}.parquet")
+            sim = load_data(model_dir, f"*{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
             tmax = min(sim_.index.max(), obs_.index.max())
@@ -85,8 +85,8 @@ def run_stats_ext(data_dir: Path, model: str):
     for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = station_sensor.split("_")
         try:
-            obs = load_data(obs_dir / f"{station_sensor}.parquet")
-            sim = load_data(model_dir / f"{station}.parquet")
+            obs = load_data(obs_dir, f"{station_sensor}.parquet")
+            sim = load_data(model_dir, f"*{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             sim_, obs_ = sim_on_obs(sim, obs)
             ext_ = seastats.storms.match_extremes(sim_, obs_, quantile=0.95)
@@ -106,8 +106,8 @@ def run_stats_tide(data_dir: Path, model: str, const: list, analysis: str = "pyt
     for station_sensor in tqdm(get_obs_station_names(data_dir)):
         station, sensor = os.path.splitext(station_sensor)[0].split("_")
         try:
-            obs = load_data(obs_dir / f"{station_sensor}.parquet")
-            sim = load_data(model_dir / f"{station}.parquet")
+            obs = load_data(obs_dir, f"{station_sensor}.parquet")
+            sim = load_data(model_dir, f"*{station}.parquet")
             info = get_parquet_attrs(obs_dir / f"{station_sensor}.parquet")
             if analysis == "pytides":
                 out_coef_sim = pytides_to_df(pytide_get_coefs(sim, RESAMPLE_MIN))
@@ -137,6 +137,8 @@ def run_stats_tide(data_dir: Path, model: str, const: list, analysis: str = "pyt
             rss_sim = compute_rss(tide_, "amplitude", "sim", "obs")
 
             ts_sim_obs, _ = sim_on_obs(sim, obs)
+            ts_sim_obs = ts_sim_obs[~ts_sim_obs.index.duplicated(keep="first")]
+            obs = obs[~obs.index.duplicated(keep="first")]
             df_sim_obs = pd.concat(
                 {
                     "sim": ts_sim_obs,
