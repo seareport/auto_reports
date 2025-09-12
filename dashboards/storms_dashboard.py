@@ -171,7 +171,17 @@ class StormDashboard(param.Parameterized):
             df = self.extremes[self.models[0]]
             df = df[df.ocean == self.current_region]
             df = df[df.storm == storm]
-            storm_map_ = storm_map(df, self.cmap, self.current_region)
+            df["n_models_found"] = (
+                df["station"]
+                .apply(
+                    lambda st: sum(
+                        bool(find_file(self.data_dir, f"models/{model}/*{st}.parquet"))
+                        for model in models
+                    ),
+                )
+                .astype(str)
+            )
+            storm_map_ = storm_map(df, "n_models_found")
             selection = hv.streams.Selection1D(source=storm_map_)
             selection.param.watch(lambda e: update_station(df, e.new), "index")
             return pn.Row(storm_map_, ts_panel)
@@ -194,8 +204,9 @@ class StormDashboard(param.Parameterized):
                     size="size",
                     alpha="alpha",
                     hover_cols=["station"],
+                    legend="bottom",
                 )
-                return main_plot.opts(**rr.scatter_ext)
+                return main_plot.opts(**rr.scatter_ext, legend_cols=8)
             else:
                 return hv.Scatter((0, 0)).opts(
                     title="No storm selected",

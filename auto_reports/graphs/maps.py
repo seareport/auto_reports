@@ -165,7 +165,7 @@ def map_gv(stats, cmap, ocean_or_sector, region):
 
 
 # storm map
-def storm_map(df, cmap, region):
+def storm_map(df, color):
     if df.empty:
         return (gv.Points((0, 0)) * gv.Points((0, 0))).opts(**rr.map_storm)
     # points = stats.hvplot.points(
@@ -183,7 +183,7 @@ def storm_map(df, cmap, region):
         y="lat",
         geo=True,
         tiles="OSM",
-        c=cmap[region],
+        c=color,
         hover_cols=["station"],
         tools=["tap"],
         active_tools=["tap"],
