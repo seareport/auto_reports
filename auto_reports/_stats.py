@@ -16,6 +16,8 @@ from auto_reports._io import get_obs_dir
 from auto_reports._io import get_obs_station_names
 from auto_reports._io import get_parquet_attrs
 from auto_reports._io import load_data
+from auto_reports._tide import assign_complex
+from auto_reports._tide import complex_rms
 from auto_reports._tide import compute_rss
 from auto_reports._tide import compute_score
 from auto_reports._tide import concat_tides_constituents
@@ -152,6 +154,7 @@ def run_stats_tide(data_dir: Path, model: str, const: list, analysis: str = "pyt
             score_sim = compute_score(corr_sim, float(rss_sim))
             tide_["corr"] = corr_sim
             tide_["rss"] = rss_sim
+            tide_["complex_rmse"] = complex_rms(assign_complex(tide_))
             tide_["score"] = score_sim
             tide_all = pd.concat([tide_all, tide_])
         except Exception as e:
