@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import glob
 import logging
 
 import colorcet as cc
@@ -152,8 +151,7 @@ class StormDashboard(param.Parameterized):
                             f"models/{model}/*{station}.parquet",
                         )
                     }
-                    obs_file = glob.glob(f"{self.obs_dir}/{station}*.parquet")[0]
-                    obs = load_data(obs_file)
+                    obs = load_data(self.obs_dir, f"{station}*.parquet")
                     obs = obs.loc[min_time:max_time]
                     ts_plot = generate_storm_ts(
                         sims,
