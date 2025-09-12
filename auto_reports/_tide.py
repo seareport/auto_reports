@@ -111,3 +111,19 @@ def compute_rss(df: pd.DataFrame, param: str, a: str, b: str):
 
 def compute_score(corr: float, rss: float) -> float:
     return np.max([0, corr]) * (1 - np.min([rss, 1]))
+
+
+def assign_complex(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.loc[:, "phi_rad"] = np.deg2rad(df["phase"])
+    df.loc[:, "H"] = df["amplitude"] * np.exp(1j * df["phi_rad"])
+    return df
+
+
+def complex_rms(df: pd.DataFrame) -> np.float64:
+    H = df["H"].unstack("method")
+    H["dH"] = H["sim"] - H["obs"]
+    H["|dH|"] = np.abs(H["dH"])
+    err_df = H[["obs", "sim", "dH", "|dH|"]]
+    rmse = np.sqrt(np.mean(err_df["|dH|"] ** 2))
+    return rmse

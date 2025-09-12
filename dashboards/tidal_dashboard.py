@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import glob
 import logging
 from datetime import date
 from datetime import timedelta
@@ -82,7 +81,7 @@ class TidalDashboard(param.Parameterized):
         metric_selector = pn.widgets.Select(
             name="Metric",
             value="rss",
-            options=["rss", "corr", "score"],
+            options=["rss", "corr", "score", "complex_rmse"],
         )
 
         @pn.depends(model_selector.param.value, metric_selector.param.value)
@@ -108,9 +107,8 @@ class TidalDashboard(param.Parameterized):
                 if station is None:
                     ts_plot = empty_time_series_plot(start, end)
                 else:
-                    sim = load_data(models_dir / f"{station}.parquet")
-                    obs_file = glob.glob(f"{str(obs_dir)}/{station}_*.parquet")[0]
-                    obs = load_data(obs_file)
+                    sim = load_data(models_dir, f"{station}.parquet")
+                    obs = load_data(obs_dir, f"{station}_*.parquet")
                     ts_plot, corr = generate_tide_ts(obs, sim, start, end, cmap=CMAP)
                     corr_sim["value"] = corr
                 ts_panel[:] = [ts_plot]

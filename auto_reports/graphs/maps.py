@@ -199,6 +199,9 @@ def tide_map(df, metric):
     if metric == "rss":
         clim = (0, 0.3)
         cmap = "rainbow4"
+    elif metric == "complex_rmse":
+        clim = (0, 1)
+        cmap = "rainbow4"
     elif metric == "score":
         clim = (0, 1)
         cmap = "rainbow4_r"
